@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>THE SHIFT — prototype</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;overflow:hidden;background:#0e1116;color:#e8ecf1;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    -webkit-user-select:none;user-select:none;touch-action:manipulation;}
+  #app{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto;position:relative;}
+
+  /* HUD */
+  #hud{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 12px;background:#161b22;border-bottom:1px solid #262d38;flex:0 0 auto;}
+  .hstat{display:flex;flex-direction:column;line-height:1.15;}
+  .hstat .lbl{font-size:9px;letter-spacing:.12em;color:#7d8794;}
+  .hstat .val{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;}
+  #clock .val{color:#e8ecf1;}
+  #shipped .val{color:#5ec98a;}
+  #timebar{height:3px;background:#262d38;flex:0 0 auto;}
+  #timefill{height:100%;width:0%;background:#4c9be8;transition:width .1s linear;}
+
+  /* alarm banner */
+  #alarm{position:absolute;top:64px;left:0;right:0;text-align:center;padding:6px;
+    background:#e5484d;color:#fff;font-size:11px;font-weight:700;letter-spacing:.14em;
+    opacity:0;pointer-events:none;transition:opacity .12s;z-index:6;}
+  #alarm.on{opacity:1;}
+
+  /* canvas */
+  #stage{flex:1 1 auto;position:relative;min-height:0;}
+  canvas{display:block;width:100%;height:100%;}
+
+  /* bottom bar */
+  #bar{flex:0 0 auto;background:#161b22;border-top:1px solid #262d38;padding:8px 12px 14px;}
+  #pool{display:flex;align-items:center;gap:8px;}
+  #pool .plbl{font-size:9px;letter-spacing:.12em;color:#7d8794;}
+  .worker{width:26px;height:26px;border-radius:50%;background:#f2c94c;
+    display:flex;align-items:center;justify-content:center;font-size:13px;color:#0e1116;font-weight:700;}
+  .worker.ghost{background:#262d38;color:#4a5361;}
+  #hint{font-size:10px;color:#7d8794;margin-top:6px;line-height:1.5;}
+
+  /* no-read routing prompt */
+  #route{position:absolute;left:0;right:0;bottom:0;background:#1b2029;
+    border-top:2px solid #f2c94c;padding:10px 12px 16px;z-index:8;display:none;}
+  #route .rt{font-size:10px;letter-spacing:.1em;color:#f2c94c;margin-bottom:8px;}
+  #route .btns{display:flex;gap:8px;}
+  #route button{flex:1;padding:16px 0;font-size:18px;font-weight:700;border:none;border-radius:6px;
+    color:#0e1116;font-family:inherit;}
+
+  /* overlays */
+  .screen{position:absolute;inset:0;background:#0e1116;z-index:10;
+    display:flex;flex-direction:column;padding:22px 20px;overflow-y:auto;}
+  .screen h1{font-size:26px;letter-spacing:.16em;margin-bottom:4px;}
+  .screen h2{font-size:11px;letter-spacing:.14em;color:#7d8794;margin-bottom:20px;font-weight:400;}
+  .screen p{font-size:12.5px;line-height:1.65;color:#b6bec9;margin-bottom:11px;}
+  .screen b{color:#e8ecf1;}
+  .btn{margin-top:auto;padding:17px;background:#4c9be8;color:#0e1116;border:none;border-radius:7px;
+    font-size:15px;font-weight:700;letter-spacing:.1em;font-family:inherit;width:100%;}
+  .hidden{display:none!important;}
+
+  /* report */
+  #rep .big{font-size:52px;font-weight:700;color:#5ec98a;line-height:1;font-variant-numeric:tabular-nums;}
+  #rep .biglbl{font-size:10px;letter-spacing:.16em;color:#7d8794;margin-bottom:16px;}
+  .row{display:flex;justify-content:space-between;font-size:12px;padding:5px 0;
+    border-bottom:1px solid #1c222b;color:#b6bec9;}
+  .row span:last-child{color:#e8ecf1;font-variant-numeric:tabular-nums;font-weight:700;}
+  .sect{font-size:9px;letter-spacing:.14em;color:#7d8794;margin:18px 0 8px;}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:30px;margin-bottom:3px;}
+  .spark i{flex:1;background:#2b3441;border-radius:1px;min-height:2px;}
+  .sparkrow{display:flex;align-items:center;gap:9px;margin-bottom:7px;}
+  .sparkrow .nm{font-size:12px;font-weight:700;width:14px;}
+  .sparkrow .wrap{flex:1;}
+  .worst{font-size:11.5px;color:#e5a04d;line-height:1.6;margin-top:6px;}
+  .lrow{display:flex;align-items:center;gap:9px;margin-bottom:11px;}
+  .lrow label{flex:1;font-size:11px;color:#b6bec9;line-height:1.35;}
+  .lrow .lv{font-size:12px;font-weight:700;width:46px;text-align:right;
+    font-variant-numeric:tabular-nums;color:#4c9be8;}
+  .lrow input[type=range]{flex:0 0 118px;accent-color:#4c9be8;}
+  .tog{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .tog .sw{width:38px;height:22px;border-radius:11px;background:#262d38;position:relative;flex:0 0 auto;}
+  .tog .sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;
+    border-radius:50%;background:#6b7280;transition:.15s;}
+  .tog.on .sw{background:#1f4a6d;} .tog.on .sw::after{left:19px;background:#4c9be8;}
+  .tog span{font-size:11px;color:#b6bec9;line-height:1.35;}
+  #psWrap{flex:1 1 auto;display:flex;align-items:center;justify-content:center;
+    gap:12px;padding:16px 4px;min-height:0;flex-wrap:wrap;}
+  .bin{width:54px;border:2px solid #2b3441;border-bottom-width:5px;border-radius:5px 5px 9px 9px;
+    display:flex;flex-direction:column-reverse;padding:4px;gap:4px;background:#12171e;}
+  .bin.sel{border-color:#f2c94c;transform:translateY(-9px);}
+  .bin.done{border-color:#5ec98a;}
+  .bin i{height:30px;border-radius:3px;display:block;}
+  .bin i.lift{transform:translateY(-4px);opacity:.85;}
+  #psBar{display:flex;gap:8px;padding:0 18px 6px;}
+  #psBar button{flex:1;padding:11px;border:none;border-radius:6px;background:#262d38;color:#b6bec9;
+    font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;}
+  #break{padding:0;}
+  #brkTop{padding:14px 18px 8px;display:flex;justify-content:space-between;align-items:flex-end;}
+  #brkTop .d{font-size:10px;letter-spacing:.14em;color:#7d8794;}
+  #brkTop .v{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;}
+  #brkStage{flex:1 1 auto;min-height:0;position:relative;}
+  #brkStage canvas{width:100%;height:100%;display:block;}
+  #brkBtns{padding:12px 18px 20px;display:flex;flex-direction:column;gap:9px;}
+  .upg{border:1px solid #262d38;border-radius:7px;padding:11px 12px;margin-bottom:9px;background:#141920;}
+  .upg.asked{border-color:#f2c94c;background:#1b1a13;}
+  .upg .nm{font-size:13px;font-weight:700;margin-bottom:3px;}
+  .upg .ds{font-size:10.5px;color:#8a93a0;line-height:1.5;margin-bottom:8px;}
+  .upg .ask{font-size:10px;color:#f2c94c;font-style:italic;margin-bottom:7px;}
+  .upg .bt{display:flex;justify-content:space-between;align-items:center;gap:10px;}
+  .upg .pr{font-size:12px;font-weight:700;color:#5ec98a;font-variant-numeric:tabular-nums;}
+  .upg button{padding:8px 15px;border:none;border-radius:5px;background:#4c9be8;color:#0e1116;
+    font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;}
+  .upg button:disabled{background:#262d38;color:#5a6472;}
+  .upg.owned{opacity:.5;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="hud">
+    <div class="hstat" id="clock"><span class="lbl">SHIFT CLOCK</span><span class="val">8:00a</span></div>
+    <div class="hstat" style="text-align:center"><span class="lbl">ON BELT</span><span class="val" id="onbelt">0</span></div>
+    <div class="hstat" id="shipped" style="text-align:right"><span class="lbl">SHIPPED</span><span class="val">0</span></div>
+  </div>
+  <div id="timebar"><div id="timefill"></div></div>
+
+  <div id="alarm">⚠ LINE BLOCKED</div>
+
+  <div id="stage"><canvas id="cv"></canvas></div>
+
+  <div id="bar">
+    <div id="pool"><span class="plbl">CREW</span><span id="poolslots" style="display:flex;gap:8px"></span></div>
+    <div id="hint">TAP A LANE to send one person there. TAP A CREW DOT to send that one back.<br>
+      HOLD a red jam to clear it. TAP a grey <b>?</b> package to route it.</div>
+  </div>
+
+  <div id="route">
+    <div class="rt" id="routeLbl">NO READ — CHECK THE LABEL</div>
+    <div class="btns">
+      <button data-l="0">A</button><button data-l="1">B</button>
+      <button data-l="2">C</button><button data-l="3">D</button>
+    </div>
+  </div>
+
+  <!-- START -->
+  <div class="screen" id="start">
+    <h1>THE SHIFT</h1>
+    <h2>PROTOTYPE v0.1 — CORE LOOP TEST</h2>
+    <p>You run a sort aisle. Packages come off the trailer, ride the belt, and drop into four chutes. Each chute loads a trailer at a dock.</p>
+    <p><b>You have three people and four lanes.</b> You are always one short, and <b>a chute with nobody on it loads nothing at all</b> — it just fills. Tap a lane to move crew onto it, up to two each.</p>
+    <p style="color:#e5484d"><b>A chute holds 8. When it fills, the next package for that chute stops dead on the belt — and nothing behind it can get past.</b> One neglected lane will strangle the entire building. The banner will tell you which chute is doing it.</p>
+    <p>Later you can buy a <b>recirculation line</b> so blocked packages loop round and try again instead of stopping everything. Until then, keep every chute breathing.</p>
+    <p><b>Crew have to walk.</b> Moving someone across the floor takes about 6 seconds — 2 between neighbouring chutes — and they load nothing on the way. A dashed circle means they're still walking.</p>
+    <p style="color:#e5a04d"><b>So chasing is a trap.</b> A chute overflows in about 10 seconds and the walk eats most of that. Moving someone every time a chute looks bad means they spend the shift walking and load almost nothing. Pick a position, <b>commit to it</b>, and only move when the gain clearly beats the walk.</p>
+    <p>One shift is 3 minutes. Ship as many packages as you can.</p>
+    <button class="btn" id="go">MEET THE CREW</button>
+    <button class="btn" id="labBtn" style="margin-top:9px;background:#262d38;color:#b6bec9">OPEN LAB</button>
+  </div>
+
+  <!-- BREAK ROOM -->
+  <div class="screen hidden" id="break">
+    <div id="brkTop">
+      <div><div class="d">SHIFT</div><div class="v" id="brkDay">1</div></div>
+      <div style="text-align:right"><div class="d">CREDITS</div><div class="v" id="brkCred" style="color:#5ec98a">0</div></div>
+    </div>
+    <div id="brkStage"><canvas id="brkCv"></canvas></div>
+    <div id="brkBtns">
+      <button class="btn" id="brkStart" style="margin-top:0">START SHIFT</button>
+      <button class="btn" id="brkDesign" style="margin-top:0;background:#262d38;color:#b6bec9">DESIGN THE FLOOR</button>
+      <button class="btn hidden" id="brkPS" style="margin-top:0;background:#3d3320;color:#f2c94c">PROBLEM SOLVE</button>
+      <button class="btn" id="brkLab" style="margin-top:0;background:transparent;color:#4a5361;padding:8px;font-size:11px">lab</button>
+    </div>
+  </div>
+
+  <!-- PROBLEM SOLVE -->
+  <div class="screen hidden" id="psolve" style="padding:0">
+    <div style="padding:16px 18px 4px">
+      <h1 style="font-size:19px">PROBLEM SOLVE</h1>
+      <h2 id="psSub" style="margin-bottom:8px">MIS-ROUTED PACKAGES FROM YOUR LAST SHIFT</h2>
+      <p style="font-size:11px;color:#8a93a0;line-height:1.5;margin:0">
+        Tap a bin to lift its top run, tap another to set it down. Same destination or an empty bin only.
+        Get every bin down to one destination and they all ship. No clock.</p>
+    </div>
+    <div id="psWrap"></div>
+    <div id="psBar">
+      <button id="psUndo">UNDO</button>
+      <button id="psReset">RESTART</button>
+    </div>
+    <div style="padding:0 18px 20px">
+      <button class="btn" id="psDone" style="margin-top:0">BACK TO THE BREAK ROOM</button>
+    </div>
+  </div>
+
+  <!-- DESIGN -->
+  <div class="screen hidden" id="design">
+    <h1 style="font-size:20px">THE FLOOR</h1>
+    <h2>SPEND CREDITS. CREW REQUESTS ARE HIGHLIGHTED.</h2>
+    <div id="upgList"></div>
+    <button class="btn" id="designBack" style="margin-top:14px">BACK TO THE BREAK ROOM</button>
+  </div>
+
+  <!-- LAB -->
+  <div class="screen hidden" id="lab">
+    <h1 style="font-size:20px">THE LAB</h1>
+    <h2>CHANGE THE WAREHOUSE, NOT THE PLAYER</h2>
+    <p style="color:#e5a04d;font-size:11.5px">Automated testing found that <b>how you play</b> changes throughput by about 2%, while <b>what the warehouse is made of</b> changes it by 79%. Try it: play a shift, then change one structural slider and play again. The difference will dwarf anything you do with your thumbs.</p>
+    <div class="sect">EXPERIMENTS (all off by default)</div>
+    <div id="labToggles"></div>
+    <div class="sect">STRUCTURE</div>
+    <div id="labSliders"></div>
+    <button class="btn" id="labStart" style="margin-top:16px">START SHIFT WITH THESE</button>
+    <button class="btn" id="labReset" style="margin-top:9px;background:#262d38;color:#b6bec9">RESET TO DEFAULTS</button>
+  </div>
+
+  <!-- REPORT -->
+  <div class="screen hidden" id="rep">
+    <h1 style="font-size:20px">SHIFT COMPLETE</h1>
+    <h2>5:00 PM</h2>
+    <div class="big" id="rBig">0</div>
+    <div class="biglbl">PACKAGES SHIPPED</div>
+    <div class="row"><span>Inbound</span><span id="rIn">0</span></div>
+    <div class="row"><span>Missed at departure</span><span id="rMiss">0</span></div>
+    <div class="row"><span>Line blocked</span><span id="rBlock">0:00</span></div>
+    <div class="row"><span>Mis-sorted</span><span id="rMis">0</span></div>
+    <div class="row"><span>Recirculated</span><span id="rRec">0</span></div>
+    <div class="row"><span>Pulled to problem solve</span><span id="rDump">0</span></div>
+    <div class="row"><span>Infeed halted</span><span id="rHalt">0:00</span></div>
+    <div class="row"><span>Exceptions cleared</span><span id="rExc">0 / 0</span></div>
+    <div class="sect">CHUTE FILL OVER SHIFT</div>
+    <div id="rSparks"></div>
+    <div class="worst" id="rWorst"></div>
+    <div class="sect" id="rVerdictLbl">VERDICT</div>
+    <p id="rVerdict" style="margin-bottom:18px"></p>
+    <button class="btn" id="again">BACK TO THE BREAK ROOM</button>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+// ══════════════════════════════════════════════════════════
+//  CONFIG — simulation-validated. Tune here, nowhere else.
+// ══════════════════════════════════════════════════════════
+const C = {
+  SHIFT_DURATION: 180,
+  SPAWN_INTERVAL_START: 1.35,
+  SPAWN_INTERVAL_END:   0.55,
+  LANE_COUNT: 4,
+  CHUTE_CAPACITY: 8,
+  PKG_SIZE: 27,                  // drawn within the slot
+  WORKER_COUNT: 3,
+  MAX_WORKERS_PER_LANE: 2,
+  WORKER_TRAVEL_TIME: 0,         // flat travel cost (legacy; 0 = off)
+  WALK_SPEED: 26,                // logical px/sec. ~8s across the floor, ~3s between neighbours.
+  BREAKROOM_X: 60,               // where idle crew stand       // sec a reassigned worker is productive nowhere
+  WAVE_ENABLED: false,            // inbound arrives in skewed waves, not uniform noise
+  WAVE_MIN: 22, WAVE_MAX: 38,    // sec per inbound trailer
+  WAVE_HEAVY: 0.55,              // share of a wave going to its primary lane
+  WAVE_SECOND: 0.25,             // share going to its secondary lane
+  MANIFEST_LEAD: true,           // next trailer's contents known before it lands
+  EXCEPTION_NEEDS_CREW: false,    // exceptions consume the same crew that loads
+  EXCEPTION_CREW_TIME: 5.0,      // sec a crew member is tied up on an exception
+  LOAD_INTERVAL_STAFFED: 1.40,   // sec per package PER worker
+  DOCK_GAP_DURATION: 18,
+  RECIRC_LINE: false,            // bought, not given. off = packages stop dead on the line.
+  MAX_RECIRC: 2,                 // passes before a package is pulled to problem solve
+  RECIRC_TRAVEL: 11,             // sec to go round the loop and re-enter the infeed
+  DEPARTURES: [[50,150],[75],[100],[125]],
+  JAM_MIN: 38, JAM_MAX: 55,
+  JAM_CLEAR_HOLD: 1.5,
+  JAM_AUTO_CLEAR: 14,            // maintenance eventually gets there; you just lose the time
+  NOREAD_MIN: 30, NOREAD_MAX: 44,
+  NOREAD_EXPIRE: 10,
+  BELT_SPEED: 105,               // px/sec, logical
+  BELT_SLOTS: 12,                // how long the line is. Everything else follows from this.
+  PKG_SPACING: 31,               // recomputed from BELT_SLOTS; kept for the collision check
+};
+
+// logical canvas space
+const W = 400, H = 660;
+const BELT_Y = 80, BELT_X0 = 18, BELT_X1 = 392;
+
+// The belt is a row of slots. A package lives in exactly one slot — a jiffy bag,
+// a full-size box, an oversize: all one slot each. Chutes and the scanner sit ON
+// slot centres, so a stopped queue lines up with the grid instead of near it.
+const SLOT0 = 18;
+// A longer line holds more packages. Slot width shrinks so the whole belt still
+// fits the view, capacity IS the slot count, and package spacing follows the slot
+// so nothing can ever overlap however long you build it.
+function slotW(){ return (BELT_X1 - SLOT0) / C.BELT_SLOTS; }
+function slotX(i){ return SLOT0 + i*slotW() + slotW()/2; }
+function relayout(){
+  C.PKG_SPACING = slotW();
+  C.PKG_SIZE = Math.max(6, slotW()*0.87);
+  const n = C.BELT_SLOTS;
+  SCANNER_X = slotX(Math.max(1, Math.round(n*0.17)));
+  DROP_X = [0,1,2,3].map(k => slotX(Math.round(n*(0.34 + k*0.19))));
+}
+let SCANNER_X = 0;
+let DROP_X = [0,0,0,0];
+
+const CHUTE_TOP = 230, CHUTE_W = 46;
+// Derived, never fixed: CHUTE_CAPACITY is a lab slider (3-14), and a hard-coded
+// slot height silently drew the lowest packages underneath the dock.
+function slotH(){ return (DOCK_Y - 30 - CHUTE_TOP - 6) / C.CHUTE_CAPACITY; }
+const DOCK_Y = 512, DOCK_H = 70;
+const LANE_NAME = ["A","B","C","D"];
+// NOTE (roadmap): capacity SHOULD derive from belt length — backup as physical
+// distance is the correct model and it's what a long line needs. Measured at this
+// scale it can't work: only ~7-13 packages fit between chute A and chute D, so any
+// backup swallows every upstream divert at once and the shift is blocked 120-180s
+// out of 180. The fixed cap acts as back-pressure, halting the infeed before the
+// queue reaches upstream chutes. Switch to the derived version when the line is
+// long enough that a queue is a fraction of it — i.e. alongside the overview camera.
+// Capacity is now literally the number of slots you can see and count.
+Object.defineProperty(C, "LINE_CAPACITY", { get(){ return C.BELT_SLOTS; } });
+relayout();
+const LANE_COL  = ["#4c9be8","#f2994a","#27ae9b","#b980e0"];
+const ALARM = "#e5484d";
+
+// ══════════════════════════════════════════════════════════
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let scale = 1, offX = 0, offY = 0;
+function fit(){
+  const st = document.getElementById("stage");
+  const w = st.clientWidth, h = st.clientHeight, dpr = window.devicePixelRatio || 1;
+  cv.width = w * dpr; cv.height = h * dpr;
+  scale = Math.min(w / W, h / H);
+  offX = (w - W * scale) / 2; offY = (h - H * scale) / 2;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+window.addEventListener("resize", fit);
+
+// ══════════════════════════════════════════════════════════
+let S = null;
+function newGame(){
+  S = {
+    t: 0, running: true,
+    packages: [],              // {dest,x,noread,expire,recirc}
+    lanes: Array.from({length:C.LANE_COUNT}, (_,i)=>({
+      count:0, workers:0, gapUntil:-1, departs:C.DEPARTURES[i].slice(), loadAcc:0, flash:0
+    })),
+    crew: Array.from({length:C.WORKER_COUNT}, ()=>({ lane:null, fromLane:null, arriveAt:0, busyUntil:0, walked:0, walkSec:0, servedAt:[0,0,0,0] })),
+    freeWorkers: C.WORKER_COUNT,
+    nextSpawn: C.SPAWN_INTERVAL_START,
+    wave: null, nextWave: null,
+    loop: [],
+    spawned:0, shipped:0, missed:0, halted:0, recirculated:0, dumped:0, blockSec:0, missorted:0,
+    jam:null,                  // {x, hold}
+    nextJam: rand(C.JAM_MIN, C.JAM_MAX),
+    noread:null,               // reference to package
+    nextNoread: rand(C.NOREAD_MIN, C.NOREAD_MAX),
+    excCleared:0, excTotal:0,
+    samples: Array.from({length:C.LANE_COUNT},()=>[]),
+    nextSample: 0,
+    worst: {line:0, t:0, lane:-1},
+    holding: false,
+  };
+  // Open with 3 lanes staffed and lane D bare. The contrast IS the tutorial:
+  // within 20 seconds the player sees D backing up while A/B/C stay clear,
+  // and learns what an unstaffed lane costs without being told.
+  for(let i = 0; i < S.crew.length && i < C.LANE_COUNT - 1; i++) S.crew[i].lane = i;
+  S.freeWorkers = 0;
+  syncCrew();
+}
+
+// Recompute per-lane assigned/active counts from the crew list.
+// `workers`  = assigned (what the player sees)
+// `active`   = actually at the chute and loading (assigned minus in-transit)
+function syncCrew(){
+  for(let i = 0; i < C.LANE_COUNT; i++){ S.lanes[i].workers = 0; S.lanes[i].active = 0; }
+  let free = 0;
+  for(const c of S.crew){
+    if(c.busyUntil > S.t) continue;              // on an exception, unavailable
+    if(c.lane === null){ free++; continue; }
+    S.lanes[c.lane].workers++;
+    if(S.t >= c.arriveAt){ S.lanes[c.lane].active++; c.servedAt[c.lane] += 1/60; }
+  }
+  S.freeWorkers = free;
+}
+
+// Move one crew member to `lane` (or null for break room), paying travel time.
+// Where a crew member physically is right now. In transit we treat them as
+// still at their origin, so a redirect mid-walk costs the full distance back.
+function crewX(c){
+  const at = (S.t < c.arriveAt && c.fromLane !== undefined) ? c.fromLane : c.lane;
+  return at === null || at === undefined ? C.BREAKROOM_X : DROP_X[at];
+}
+function travelTime(c, lane){
+  if(C.WALK_SPEED > 0){
+    const to = lane === null ? C.BREAKROOM_X : DROP_X[lane];
+    return Math.abs(to - crewX(c)) / C.WALK_SPEED;
+  }
+  return lane === null ? 0 : C.WORKER_TRAVEL_TIME;
+}
+function moveCrew(c, lane){
+  if(c.busyUntil && S.t < c.busyUntil) return;   // tied up on an exception
+  if(c.lane === lane) return;
+  // capture where they physically are BEFORE reassigning, or the distance
+  // collapses to zero and travel time silently never gets paid
+  const fromX = crewX(c);
+  const toX = lane === null ? C.BREAKROOM_X : DROP_X[lane];
+  c.fromLane = (S.t < c.arriveAt && c.fromLane !== null) ? c.fromLane : c.lane;
+  c.lane = lane;
+  const secs = C.WALK_SPEED > 0
+    ? Math.abs(toX - fromX) / C.WALK_SPEED
+    : (lane === null ? 0 : C.WORKER_TRAVEL_TIME);
+  c.walked += Math.abs(toX - fromX);
+  c.walkSec += secs;
+  c.arriveAt = S.t + secs;
+}
+
+// Pull the nearest available crew member onto an exception. They stop loading.
+// This is what makes exceptions a real cost rather than a free tap.
+function commitCrewToException(){
+  if(!C.EXCEPTION_NEEDS_CREW) return true;
+  let pick = S.crew.find(c => c.lane === null && !(c.busyUntil > S.t));
+  if(!pick) pick = S.crew.find(c => !(c.busyUntil > S.t));
+  if(!pick) return false;
+  pick.lane = null;
+  pick.busyUntil = S.t + C.EXCEPTION_CREW_TIME;
+  pick.arriveAt = pick.busyUntil + C.WORKER_TRAVEL_TIME;
+  syncCrew();
+  return true;
+}
+
+// Used by the automated harness: fill lanes in priority order, keeping anyone
+// already in the right place so that thrashing is what costs you, not staffing.
+function setAlloc(order){
+  const want = new Array(C.LANE_COUNT).fill(0);
+  let left = C.WORKER_COUNT;
+  for(const i of order){
+    if(left <= 0) break;
+    const take = Math.min(C.MAX_WORKERS_PER_LANE, left);
+    want[i] = take; left -= take;
+  }
+  const have = new Array(C.LANE_COUNT).fill(0);
+  const spare = [];
+  for(const c of S.crew){
+    if(c.lane !== null && have[c.lane] < want[c.lane]) have[c.lane]++;
+    else spare.push(c);
+  }
+  for(let i = 0; i < C.LANE_COUNT; i++)
+    while(have[i] < want[i] && spare.length){ moveCrew(spare.pop(), i); have[i]++; }
+  for(const c of spare) moveCrew(c, null);
+  syncCrew();
+}
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+// Freight comes in shapes. Every one of them still occupies exactly one slot —
+// that's the rule the whole belt is built on, so an oversize costs you the same
+// belt room as a jiffy bag. What differs is what happens at the chute.
+const KINDS = ["box","box","box","box","bag","bag","small","small","flat","oversize"];
+function pickKind(){ return KINDS[Math.floor(Math.random()*KINDS.length)]; }
+
+// A wave models one inbound trailer: its freight skews hard toward one or two
+// destinations, the way a real trailer loaded at a single origin does. Uniform
+// random destinations make every lane statistically identical, which leaves the
+// player with no decision worth making.
+function rollWave(){
+  const primary = Math.floor(Math.random()*C.LANE_COUNT);
+  let secondary = Math.floor(Math.random()*C.LANE_COUNT);
+  if(secondary === primary) secondary = (secondary+1) % C.LANE_COUNT;
+  const w = new Array(C.LANE_COUNT).fill(0);
+  const rest = (1 - C.WAVE_HEAVY - C.WAVE_SECOND) / (C.LANE_COUNT - 2);
+  for(let i = 0; i < C.LANE_COUNT; i++) w[i] = rest;
+  w[primary] = C.WAVE_HEAVY; w[secondary] = C.WAVE_SECOND;
+  return { weights:w, primary, secondary, until: S.t + rand(C.WAVE_MIN, C.WAVE_MAX) };
+}
+function pickDest(){
+  if(!C.WAVE_ENABLED) return Math.floor(Math.random()*C.LANE_COUNT);
+  if(!S.wave || S.t >= S.wave.until){
+    S.wave = S.nextWave || rollWave();
+    S.wave.until = S.t + rand(C.WAVE_MIN, C.WAVE_MAX);
+    S.nextWave = C.MANIFEST_LEAD ? rollWave() : null;
+  }
+  let r = Math.random(), acc = 0;
+  for(let i = 0; i < C.LANE_COUNT; i++){ acc += S.wave.weights[i]; if(r <= acc) return i; }
+  return C.LANE_COUNT - 1;
+}
+
+// ══════════════════════════════════════════════════════════
+//  SIM
+// ══════════════════════════════════════════════════════════
+function spawnInterval(t){
+  const f = Math.min(1, t / C.SHIFT_DURATION);
+  return C.SPAWN_INTERVAL_START + (C.SPAWN_INTERVAL_END - C.SPAWN_INTERVAL_START) * f;
+}
+
+function step(dt){
+  if(!S.running) return;
+  S.t += dt;
+  if(S.t >= C.SHIFT_DURATION){ S.t = C.SHIFT_DURATION; endShift(); return; }
+
+  // ── 1. SPAWN
+  if(S.t >= S.nextSpawn){
+    // The infeed slot has to be physically clear. Being under capacity is not
+    // enough — without this, packages materialise on top of each other at the
+    // head of the belt whenever the line is moving slower than the trailer.
+    const tail = S.packages.reduce((m,p)=> (m === null || p.x < m.x) ? p : m, null);
+    const infeedClear = !tail || tail.x >= slotX(0) + C.PKG_SPACING - 0.01;
+    if(S.packages.length < C.LINE_CAPACITY && infeedClear){
+      const p = { dest: pickDest(), x: slotX(0), noread:false, expire:0, recirc:false, loops:0, blocked:false, kind:pickKind() };
+      if(S.noread === null && S.t >= S.nextNoread){
+        p.noread = true; p.expire = C.NOREAD_EXPIRE;
+        S.noread = p; S.excTotal++;
+        S.nextNoread = S.t + rand(C.NOREAD_MIN, C.NOREAD_MAX);
+      }
+      S.packages.push(p); S.spawned++;
+      S.nextSpawn = S.t + spawnInterval(S.t);
+    } else {
+      S.halted += dt;   // line full — infeed stops
+    }
+  }
+
+  // ── 1b. packages coming back round on the return loop
+  for(let i = S.loop.length - 1; i >= 0; i--){
+    const p = S.loop[i];
+    if(S.t < p.returnAt) continue;
+    if(S.packages.length >= C.LINE_CAPACITY) continue;      // wait for a slot
+    const tail = S.packages.reduce((m,q)=> (m === null || q.x < m.x) ? q : m, null);
+    if(tail && tail.x < slotX(0) + C.PKG_SPACING - 0.01) continue;
+    p.x = slotX(0); S.loop.splice(i,1); S.packages.push(p);
+  }
+
+  // ── 2. JAM spawn
+  if(S.jam === null && S.t >= S.nextJam && S.t < C.SHIFT_DURATION - 12){
+    S.jam = { x: rand(BELT_X0+40, DROP_X[3]-10), hold:0, age:0 };
+    S.excTotal++;
+    S.nextJam = S.t + rand(C.JAM_MIN, C.JAM_MAX);
+  }
+  // jam ages out — maintenance arrives eventually. Clearing it yourself just
+  // buys back the stall time, which is exactly what it's worth.
+  if(S.jam){
+    S.jam.age += dt;
+    if(S.jam.age >= C.JAM_AUTO_CLEAR){ S.jam = null; }
+  }
+  // no-read expiry
+  if(S.noread){
+    S.noread.expire -= dt;
+    if(S.noread.expire <= 0){
+      const i = S.packages.indexOf(S.noread);
+      if(i >= 0) S.packages.splice(i,1);
+      S.missed++; S.noread = null;
+    }
+  }
+
+  // ── 3. MOVE + ROUTE  (front of belt first)
+  S.packages.sort((a,b)=> b.x - a.x);
+  for(let i = 0; i < S.packages.length; i++){
+    const p = S.packages[i];
+    // a recirculating package is heading for the end of the line to loop around
+    let target = p.noread ? SCANNER_X : (p.recirc ? BELT_X1 : DROP_X[p.dest]);
+    // jam blocks anything behind it
+    if(S.jam && p.x <= S.jam.x) target = Math.min(target, S.jam.x - 9);
+    // can't close on the package ahead
+    if(i > 0) target = Math.min(target, S.packages[i-1].x - C.PKG_SPACING);
+
+    if(p.x < target) p.x = Math.min(target, p.x + C.BELT_SPEED*dt);
+
+    if(p.noread) continue;
+
+    // reached its chute?
+    if(!p.recirc && Math.abs(p.x - DROP_X[p.dest]) < 0.6){
+      const L = S.lanes[p.dest];
+      if(L.count < C.CHUTE_CAPACITY){
+        L.count++; S.packages.splice(i,1); i--;
+      } else if(C.RECIRC_LINE){
+        // you paid for a return loop: it comes OFF the main line entirely and
+        // re-enters at the infeed later, so it stops choking everything behind it
+        p.loops = (p.loops||0) + 1;
+        S.packages.splice(i,1); i--;
+        S.recirculated++;
+        if(p.loops >= C.MAX_RECIRC){ S.missed++; S.dumped++; }
+        else { p.blocked = false; p.recirc = false; p.returnAt = S.t + C.RECIRC_TRAVEL;
+               S.loop.push(p); }
+      } else {
+        // no recirc line. It sits on the divert and everything behind it stops.
+        p.blocked = true;
+        S.blockSec += dt;
+      }
+    } else if(p.blocked && S.lanes[p.dest].count < C.CHUTE_CAPACITY){
+      p.blocked = false;
+    }
+
+  }
+
+  syncCrew();
+
+  // ── 4. LOAD
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    const L = S.lanes[i];
+    if(S.t < L.gapUntil) continue;              // no trailer at dock
+    // No crew at the chute, no loading. There is nobody standing there.
+    if(L.active === 0){ L.loadAcc = 0; continue; }
+    const rate = L.active / C.LOAD_INTERVAL_STAFFED;
+    L.loadAcc += rate * dt;
+    while(L.loadAcc >= 1 && L.count > 0){ L.count--; L.loadAcc--; S.shipped++; }
+    if(L.count === 0) L.loadAcc = 0;
+    if(L.flash > 0) L.flash -= dt;
+  }
+
+  // ── 5. DEPARTURES
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    const L = S.lanes[i];
+    if(L.departs.length && S.t >= L.departs[0]){
+      L.departs.shift();
+      S.missed += L.count; L.count = 0; L.loadAcc = 0;
+      L.gapUntil = S.t + C.DOCK_GAP_DURATION;
+      L.flash = 0.7;
+    }
+  }
+
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    const L = S.lanes[i];
+    if(L.count >= C.CHUTE_CAPACITY) L.fullSec += dt;
+    if(L.active === 0) L.unstaffedSec += dt;
+    if(S.t < L.gapUntil && L.count > 0) L.gapSec += dt;
+  }
+
+  // ── 6. TELEMETRY
+  if(S.t >= S.nextSample){
+    for(let i = 0; i < C.LANE_COUNT; i++) S.samples[i].push(S.lanes[i].count);
+    S.nextSample += 10;
+  }
+  if(S.packages.length > S.worst.line){
+    S.worst.line = S.packages.length; S.worst.t = S.t;
+    let mx = -1, ml = 0;
+    for(let i = 0; i < C.LANE_COUNT; i++) if(S.lanes[i].count > mx){ mx = S.lanes[i].count; ml = i; }
+    S.worst.lane = ml;
+  }
+}
+
+// Which chute is actually strangling the line right now — the earliest blocked
+// package on the belt. Everything behind it is stopped because of that one lane.
+function blockingLane(){
+  let best = null;
+  for(const p of S.packages) if(p.blocked && (!best || p.x < best.x)) best = p;
+  return best ? best.dest : -1;
+}
+
+// ══════════════════════════════════════════════════════════
+//  INPUT
+// ══════════════════════════════════════════════════════════
+function toLogical(cx, cy){
+  const r = cv.getBoundingClientRect();
+  return { x: (cx - r.left - offX)/scale, y: (cy - r.top - offY)/scale };
+}
+function laneAt(x, y){
+  if(y < CHUTE_TOP - 34 || y > DOCK_Y + DOCK_H + 42) return -1;
+  for(let i = 0; i < C.LANE_COUNT; i++)
+    if(Math.abs(x - DROP_X[i]) < CHUTE_W/2 + 8) return i;
+  return -1;
+}
+// tap a lane: 0 -> 1 -> 2 -> 0
+function addCrew(i){
+  if(S.lanes[i].workers >= C.MAX_WORKERS_PER_LANE) return false;
+  const free = S.crew.find(c => c.lane === null && !(c.busyUntil > S.t));
+  if(!free) return false;
+  moveCrew(free, i); syncCrew(); drawPool(); return true;
+}
+// One tap, one person. Never dump a whole lane on a single press.
+function removeCrew(i){
+  const on = S.crew.filter(c => c.lane === i && !(c.busyUntil > S.t));
+  if(!on.length) return false;
+  on.sort((a,b) => b.arriveAt - a.arriveAt);   // the one you sent most recently
+  moveCrew(on[0], null); syncCrew(); drawPool(); return true;
+}
+function tapLane(i, onDots, dotIndex){
+  const L = S.lanes[i];
+  if(onDots){
+    // the dots are the crew slots: a filled one sends that person away,
+    // an empty one calls someone over
+    if(dotIndex < L.workers) removeCrew(i); else addCrew(i);
+    return;
+  }
+  if(!addCrew(i)) removeCrew(i);   // lane full or nobody spare -> take ONE off
+}
+
+let holdTimer = null;
+function onDown(e){
+  if(!S || !S.running) return;
+  const t = e.touches ? e.touches[0] : e;
+  const p = toLogical(t.clientX, t.clientY);
+
+  // jam? (hold)
+  if(S.jam && Math.abs(p.x - S.jam.x) < 26 && Math.abs(p.y - BELT_Y) < 30){
+    S.holding = true; e.preventDefault(); return;
+  }
+  // no-read package? (tap)
+  if(S.noread && Math.abs(p.x - S.noread.x) < 20 && Math.abs(p.y - BELT_Y) < 30){
+    openRoute(); e.preventDefault(); return;
+  }
+  const L = laneAt(p.x, p.y);
+  if(L >= 0){
+    const dotY = DOCK_Y + DOCK_H + 30;
+    const onDots = Math.abs(p.y - dotY) < 26;
+    const dotIndex = p.x < DROP_X[L] ? 0 : 1;
+    tapLane(L, onDots, dotIndex);
+    e.preventDefault();
+  }
+}
+function onUp(){ S && (S.holding = false); }
+cv.addEventListener("touchstart", onDown, {passive:false});
+cv.addEventListener("touchend", onUp);
+cv.addEventListener("touchcancel", onUp);
+cv.addEventListener("mousedown", onDown);
+window.addEventListener("mouseup", onUp);
+
+const routeEl = document.getElementById("route");
+function openRoute(){
+  if(!S.noread) return;
+  // someone reads it by hand — you still have to put it on the right chute
+  document.getElementById("routeLbl").textContent =
+    "LABEL READS " + LANE_NAME[S.noread.dest] + " — PUT IT ON THE RIGHT CHUTE";
+  routeEl.style.display = "block";
+}
+function closeRoute(){ routeEl.style.display = "none"; }
+routeEl.querySelectorAll("button").forEach((b,i)=>{
+  b.style.background = LANE_COL[i];
+  b.addEventListener("click", ()=>{
+    if(S.noread){
+      const pick = parseInt(b.dataset.l,10);
+      if(pick !== S.noread.dest) S.missorted++;   // wrong chute — it's someone else's problem now
+      S.noread.dest = pick;
+      S.noread.noread = false;
+      S.noread = null; S.excCleared++;
+    }
+    closeRoute();
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════════════════
+function rr(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+// Every shape is drawn inside one slot. Nothing spills into its neighbour.
+function drawParcel(cx, cy, size, col, kind){
+  const h = size/2;
+  ctx.fillStyle = col;
+  if(kind === "bag"){
+    rr(cx-h+2, cy-h+3, size-4, size-6, 9); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.28)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(cx-h+5, cy-h+7); ctx.lineTo(cx+h-5, cy-h+7); ctx.stroke();
+  } else if(kind === "small"){
+    rr(cx-7, cy-7, 14, 14, 2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fillRect(cx-7, cy-1, 14, 2);
+  } else if(kind === "flat"){
+    rr(cx-h, cy-6, size, 12, 2); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fillRect(cx-h, cy-1, size, 2);
+  } else if(kind === "oversize"){
+    rr(cx-h-1, cy-h-1, size+2, size+2, 2); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 2;
+    rr(cx-h-1, cy-h-1, size+2, size+2, 2); ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.6)";
+    ctx.fillRect(cx-h+1, cy-h+1, 5, 3); ctx.fillRect(cx+h-6, cy+h-4, 5, 3);
+  } else {                                   // box
+    rr(cx-h, cy-h, size, size, 3); ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,.22)"; ctx.fillRect(cx-h, cy-2, size, 4);
+    ctx.fillStyle = "rgba(255,255,255,.14)"; ctx.fillRect(cx-2, cy-h, 4, size);
+  }
+}
+
+function clockStr(t){
+  const mins = 8*60 + (t/C.SHIFT_DURATION)*(17*60 - 8*60);
+  let h = Math.floor(mins/60), m = Math.floor(mins%60);
+  const ap = h >= 12 ? "p" : "a"; let hh = h % 12; if(hh === 0) hh = 12;
+  return hh + ":" + String(m).padStart(2,"0") + ap;
+}
+
+function draw(){
+  const st = document.getElementById("stage");
+  ctx.clearRect(0,0,st.clientWidth,st.clientHeight);
+  ctx.save();
+  ctx.translate(offX, offY); ctx.scale(scale, scale);
+
+  const lineFull = S.packages.length >= C.LINE_CAPACITY;
+
+  // ── infeed
+  ctx.fillStyle = lineFull ? "#3a2226" : "#1b2029";
+  rr(4, BELT_Y-17, 26, 34, 3); ctx.fill();
+  ctx.fillStyle = lineFull ? ALARM : "#4a5361";
+  ctx.font = "700 7px ui-monospace,monospace"; ctx.textAlign = "center";
+  ctx.fillText("IN", 17, BELT_Y+2);
+
+  // ── belt
+  const SW = slotW();
+  ctx.fillStyle = "#1a1f27";
+  rr(SLOT0-5, BELT_Y-19, C.BELT_SLOTS*SW+10, 38, 5); ctx.fill();
+  for(let i = 0; i < C.BELT_SLOTS; i++){
+    const x0 = SLOT0 + i*SW;
+    ctx.fillStyle = i % 2 ? "#171c24" : "#141920";
+    ctx.fillRect(x0+0.6, BELT_Y-16, SW-1.2, 32);
+    ctx.strokeStyle = "#252d38"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, BELT_Y-16); ctx.lineTo(x0, BELT_Y+16); ctx.stroke();
+  }
+  ctx.strokeStyle = "#252d38"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(SLOT0+C.BELT_SLOTS*SW, BELT_Y-16);
+  ctx.lineTo(SLOT0+C.BELT_SLOTS*SW, BELT_Y+16); ctx.stroke();
+
+  // ── scanner post
+  ctx.strokeStyle = "#39424f"; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(SCANNER_X, BELT_Y-18); ctx.lineTo(SCANNER_X, BELT_Y+18); ctx.stroke();
+  ctx.fillStyle = "#4a5361"; ctx.font = "6px ui-monospace,monospace";
+  ctx.fillText("SCAN", SCANNER_X, BELT_Y-22);
+
+  // ── drop chutes down from belt
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    ctx.strokeStyle = "#242b35"; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(DROP_X[i], BELT_Y+8); ctx.lineTo(DROP_X[i], CHUTE_TOP-4); ctx.stroke();
+  }
+
+  const blLane = blockingLane();
+  const pulse = 0.5 + 0.5*Math.sin(S.t*7);
+
+  // ── packages
+  for(const p of S.packages){
+    const blocked = !p.noread && Math.abs(p.x - DROP_X[p.dest]) < 1.2
+                    && S.lanes[p.dest].count >= C.CHUTE_CAPACITY;
+    if(p.noread){
+      const hs2 = C.PKG_SIZE/2;
+      ctx.fillStyle = "#8b93a0";
+      rr(p.x-hs2, BELT_Y-hs2, C.PKG_SIZE, C.PKG_SIZE, 3); ctx.fill();
+      ctx.fillStyle = "#0e1116"; ctx.font = "700 15px ui-monospace,monospace";
+      ctx.fillText("?", p.x, BELT_Y+5.5);
+      ctx.strokeStyle = "#f2c94c"; ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(p.x, BELT_Y, hs2+5, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(p.expire/C.NOREAD_EXPIRE));
+      ctx.stroke();
+    } else {
+      const hs = C.PKG_SIZE/2;
+      drawParcel(p.x, BELT_Y, C.PKG_SIZE, LANE_COL[p.dest], p.kind);
+      if(blocked){
+        ctx.strokeStyle = p.blocked ? "rgba(229,72,77," + (0.6+0.4*pulse) + ")" : ALARM;
+        ctx.lineWidth = 3;
+        rr(p.x-hs-2.5, BELT_Y-hs-2.5, C.PKG_SIZE+5, C.PKG_SIZE+5, 4); ctx.stroke();
+      }
+    }
+  }
+
+  // ── jam
+  if(S.jam){
+    const j = S.jam;
+    ctx.fillStyle = ALARM;
+    rr(j.x-9, BELT_Y-13, 18, 26, 3); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.font = "700 12px ui-monospace,monospace";
+    ctx.fillText("!", j.x, BELT_Y+4);
+    if(S.holding){
+      ctx.strokeStyle = "#5ec98a"; ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.arc(j.x, BELT_Y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(j.hold/C.JAM_CLEAR_HOLD));
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = "rgba(229,72,77,.35)"; ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(j.x, BELT_Y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - j.age/C.JAM_AUTO_CLEAR));
+      ctx.stroke();
+      ctx.fillStyle = ALARM; ctx.font = "700 7px ui-monospace,monospace";
+      ctx.fillText("HOLD", j.x, BELT_Y+30);
+    }
+  }
+
+  // ── lanes
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    const L = S.lanes[i], cx = DROP_X[i], x0 = cx - CHUTE_W/2;
+    const full = L.count >= C.CHUTE_CAPACITY;
+    const culprit = (i === blLane);
+    const inGap = S.t < L.gapUntil;
+
+    // chute body
+    const SH = slotH();
+    ctx.fillStyle = "#151a21";
+    rr(x0, CHUTE_TOP, CHUTE_W, C.CHUTE_CAPACITY*SH + 6, 4); ctx.fill();
+    ctx.strokeStyle = culprit ? "rgba(229,72,77," + (0.55 + 0.45*pulse) + ")" : full ? ALARM : "#262d38";
+    ctx.lineWidth = culprit ? 4 : full ? 2 : 1;
+    rr(x0, CHUTE_TOP, CHUTE_W, C.CHUTE_CAPACITY*SH + 6, 4); ctx.stroke();
+
+    // stacked packages (fill from bottom)
+    for(let k = 0; k < L.count; k++){
+      const y = CHUTE_TOP + 3 + (C.CHUTE_CAPACITY-1-k)*SH;
+      ctx.fillStyle = LANE_COL[i];
+      rr(x0+5, y+1.5, CHUTE_W-10, Math.max(4, SH-3.5), 2); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,.2)";
+      ctx.fillRect(x0+5, y+1.5+Math.max(4,SH-3.5)/2-1, CHUTE_W-10, 2);
+    }
+    if(full){
+      ctx.fillStyle = ALARM; ctx.font = "700 8px ui-monospace,monospace";
+      ctx.fillText("FULL", cx, CHUTE_TOP - 6);
+    }
+    if(culprit){
+      // a big unmissable arrow from the stuck package down onto the guilty chute
+      ctx.fillStyle = "rgba(229,72,77," + (0.5 + 0.5*pulse) + ")";
+      const ay = CHUTE_TOP - 46;
+      ctx.beginPath();
+      ctx.moveTo(cx, ay + 26); ctx.lineTo(cx - 11, ay + 8); ctx.lineTo(cx - 5, ay + 8);
+      ctx.lineTo(cx - 5, ay - 6); ctx.lineTo(cx + 5, ay - 6); ctx.lineTo(cx + 5, ay + 8);
+      ctx.lineTo(cx + 11, ay + 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = ALARM; ctx.font = "700 8px ui-monospace,monospace";
+      ctx.fillText("SEND CREW", cx, DOCK_Y + DOCK_H + 66);
+    }
+
+    // lane letter
+    ctx.fillStyle = LANE_COL[i]; ctx.font = "700 16px ui-monospace,monospace";
+    ctx.fillText(LANE_NAME[i], cx, CHUTE_TOP - 22);
+
+    // dock
+    const dy = DOCK_Y;
+    if(inGap){
+      const left = L.gapUntil - S.t;
+      ctx.fillStyle = "#2a1a1d";
+      rr(x0, dy, CHUTE_W, DOCK_H, 3); ctx.fill();
+      ctx.strokeStyle = ALARM; ctx.lineWidth = 1.5;
+      ctx.setLineDash([3,3]); rr(x0, dy, CHUTE_W, DOCK_H, 3); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = ALARM; ctx.font = "700 8px ui-monospace,monospace";
+      ctx.fillText("NO", cx, dy+22); ctx.fillText("TRAILER", cx, dy+34);
+      ctx.font = "700 15px ui-monospace,monospace";
+      ctx.fillText(left.toFixed(0)+"s", cx, dy+57);
+    } else {
+      const nxt = L.departs.length ? L.departs[0] : C.SHIFT_DURATION;
+      const until = nxt - S.t;
+      const soon = until < 20;
+      ctx.fillStyle = L.flash > 0 ? "#3d3320" : "#1b2029";
+      rr(x0, dy, CHUTE_W, DOCK_H, 3); ctx.fill();
+      ctx.strokeStyle = soon ? "#f2c94c" : "#262d38"; ctx.lineWidth = soon ? 2 : 1;
+      rr(x0, dy, CHUTE_W, DOCK_H, 3); ctx.stroke();
+      ctx.fillStyle = "#7d8794"; ctx.font = "7px ui-monospace,monospace";
+      ctx.fillText("DEPARTS", cx, dy+22); ctx.fillText("IN", cx, dy+34);
+      ctx.fillStyle = soon ? "#f2c94c" : "#b6bec9";
+      ctx.font = "700 16px ui-monospace,monospace";
+      ctx.fillText(Math.max(0,until).toFixed(0)+"s", cx, dy+57);
+    }
+
+    // crew dots
+    for(let k = 0; k < C.MAX_WORKERS_PER_LANE; k++){
+      const wx = cx - 13 + k*26, wy = dy + DOCK_H + 30;
+      const here    = k < L.active;                 // arrived and loading
+      const walking = !here && k < L.workers;       // assigned but still walking
+      ctx.beginPath(); ctx.arc(wx, wy, 13, 0, Math.PI*2);
+      ctx.fillStyle = here ? "#f2c94c" : "#161b22"; ctx.fill();
+      ctx.strokeStyle = here ? "#f2c94c" : walking ? "#8a7220" : "#2b3441";
+      ctx.lineWidth = 1.5;
+      if(walking) ctx.setLineDash([3,3]);
+      ctx.stroke(); ctx.setLineDash([]);
+      if(walking){
+        ctx.fillStyle = "#8a7220"; ctx.font = "700 11px ui-monospace,monospace";
+        ctx.textAlign = "center"; ctx.fillText("\u2192", wx, wy+4);
+      }
+    }
+    // walking-crew callout so the cost is legible, not mysterious
+    if(L.workers > L.active){
+      ctx.fillStyle = "#8a7220"; ctx.font = "700 7px ui-monospace,monospace";
+      ctx.fillText("WALKING", cx, dy + DOCK_H + 54);
+    }
+  }
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════════════════════════
+//  HUD
+// ══════════════════════════════════════════════════════════
+const elClock = document.querySelector("#clock .val");
+const elShip  = document.querySelector("#shipped .val");
+const elBelt  = document.getElementById("onbelt");
+const elFill  = document.getElementById("timefill");
+const elAlarm = document.getElementById("alarm");
+const elPool  = document.getElementById("poolslots");
+
+function drawPool(){
+  elPool.innerHTML = "";
+  for(let i = 0; i < C.WORKER_COUNT; i++){
+    const d = document.createElement("div");
+    d.className = "worker" + (i < S.freeWorkers ? "" : " ghost");
+    d.textContent = i < S.freeWorkers ? "●" : "○";
+    elPool.appendChild(d);
+  }
+}
+function hud(){
+  elClock.textContent = clockStr(S.t);
+  elShip.textContent  = S.shipped;
+  elBelt.textContent  = S.packages.length + "/" + C.LINE_CAPACITY;
+  elBelt.style.color  = S.packages.length >= C.LINE_CAPACITY ? ALARM
+                      : S.packages.length > C.LINE_CAPACITY*0.7 ? "#f2c94c" : "#e8ecf1";
+  elFill.style.width  = (100*S.t/C.SHIFT_DURATION) + "%";
+  const bl = blockingLane();
+  if(bl >= 0){
+    elAlarm.textContent = "\u26a0 CHUTE " + LANE_NAME[bl] + " IS FULL \u2014 NOTHING CAN PASS. GET CREW ON " + LANE_NAME[bl];
+    elAlarm.classList.add("on");
+  } else if(S.packages.length >= C.LINE_CAPACITY){
+    elAlarm.textContent = "\u26a0 INFEED HALTED \u2014 LINE IS FULL";
+    elAlarm.classList.add("on");
+  } else elAlarm.classList.remove("on");
+}
+
+// ══════════════════════════════════════════════════════════
+//  REPORT
+// ══════════════════════════════════════════════════════════
+function endShift(){
+  S.running = false;
+  closeRoute();
+  for(let i = 0; i < C.LANE_COUNT; i++) S.missed += S.lanes[i].count;
+  S.missed += S.packages.length;
+
+  document.getElementById("rBig").textContent  = S.shipped;
+  document.getElementById("rIn").textContent   = S.spawned;
+  document.getElementById("rMiss").textContent = S.missed;
+  const bm = Math.floor(S.blockSec/60), bs2 = Math.floor(S.blockSec%60);
+  document.getElementById("rBlock").textContent = bm + ":" + String(bs2).padStart(2,"0");
+  document.getElementById("rBlock").style.color = S.blockSec > 20 ? ALARM : "#5ec98a";
+  document.getElementById("rMis").textContent  = S.missorted;
+  document.getElementById("rRec").textContent  = S.recirculated;
+  document.getElementById("rDump").textContent = S.dumped;
+  document.getElementById("rDump").style.color = S.dumped > 8 ? ALARM : "#e8ecf1";
+  const m = Math.floor(S.halted/60), sec = Math.floor(S.halted%60);
+  document.getElementById("rHalt").textContent = m + ":" + String(sec).padStart(2,"0");
+  document.getElementById("rHalt").style.color = S.halted > 5 ? ALARM : "#5ec98a";
+  document.getElementById("rExc").textContent  = S.excCleared + " / " + S.excTotal;
+
+  // sparklines
+  const sp = document.getElementById("rSparks"); sp.innerHTML = "";
+  for(let i = 0; i < C.LANE_COUNT; i++){
+    const row = document.createElement("div"); row.className = "sparkrow";
+    const nm = document.createElement("div"); nm.className = "nm";
+    nm.textContent = LANE_NAME[i]; nm.style.color = LANE_COL[i];
+    const wrap = document.createElement("div"); wrap.className = "wrap";
+    const bar = document.createElement("div"); bar.className = "spark";
+    for(const v of S.samples[i]){
+      const b = document.createElement("i");
+      b.style.height = Math.max(6, 100*v/C.CHUTE_CAPACITY) + "%";
+      b.style.background = v >= C.CHUTE_CAPACITY ? ALARM
+                         : v >= C.CHUTE_CAPACITY-2 ? "#f2994a" : LANE_COL[i];
+      bar.appendChild(b);
+    }
+    wrap.appendChild(bar); row.appendChild(nm); row.appendChild(wrap); sp.appendChild(row);
+  }
+
+  document.getElementById("rWorst").textContent =
+    "WORST MOMENT — " + clockStr(S.worst.t) + ": belt at " + S.worst.line +
+    "/" + C.LINE_CAPACITY + ", lane " + (LANE_NAME[S.worst.lane]||"–") + " deepest.";
+
+  // verdict vs simulated benchmarks
+  let v;
+  if(S.shipped >= 145)      v = "At the measured ceiling (154). You're pre-draining chutes before departures instead of reacting after. That's the skill the whole game is built on.";
+  else if(S.shipped >= 115) v = "Strong. You're keeping most lanes breathing. What's left is usually one chute you let fill while you were fixing another.";
+  else if(S.shipped >= 90)  v = "Middle of the curve. Nobody at a chute means nothing loads at all \u2014 an unattended lane fills and stops the whole line behind it.";
+  else                      v = "Around leave-it-alone level (73). You have three people and four lanes, so one is always bare. Keep rotating, and never let the bare one be the one nearest full.";
+  document.getElementById("rVerdict").innerHTML = v;
+
+  // hand the shift to the break room so the crew can talk about it
+  META.last = {
+    shipped: S.shipped, halted: S.halted, dumped: S.dumped, recirc: S.recirculated,
+    gapLoss: S.lanes.reduce((a,L)=>a+L.gapSec,0), blockSec: S.blockSec, missorted: S.missorted,
+    lanes: S.lanes.map(L=>({ fullSec:L.fullSec, unstaffedSec:L.unstaffedSec })),
+    crew: S.crew.map((c,i)=>{
+      let mainLane = 0, farLane = 0, best = -1;
+      c.servedAt.forEach((v,k)=>{ if(v > best){ best = v; mainLane = k; } });
+      let fd = -1;
+      for(let k = 0; k < C.LANE_COUNT; k++){
+        const d = Math.abs(DROP_X[k] - DROP_X[mainLane]);
+        if(d > fd){ fd = d; farLane = k; }
+      }
+      return { i, walkSec:c.walkSec, walked:c.walked, mainLane, farLane };
+    }),
+  };
+  META.credits += S.shipped;
+  META.backlog += S.missorted + S.dumped;
+  META.day += 1;
+  settleMorale();
+
+  document.getElementById("rep").classList.remove("hidden");
+}
+
+// ══════════════════════════════════════════════════════════
+//  LOOP
+// ══════════════════════════════════════════════════════════
+let last = 0, acc = 0;
+const FIXED = 1/60;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if(!S) return;
+  if(!last) last = ts;
+  let dt = (ts - last)/1000; last = ts;
+  if(dt > 0.25) dt = 0.25;
+
+  if(S.running){
+    acc += dt;
+    while(acc >= FIXED){
+      // jam hold progress
+      if(S.jam && S.holding){
+        S.jam.hold += FIXED;
+        if(S.jam.hold >= C.JAM_CLEAR_HOLD){ S.jam = null; S.excCleared++; S.holding = false; }
+      } else if(S.jam && !S.holding){
+        S.jam.hold = Math.max(0, S.jam.hold - FIXED*2);
+      }
+      step(FIXED);
+      acc -= FIXED;
+      if(!S.running) break;
+    }
+    hud();
+  }
+  draw();
+  if(!document.getElementById("break").classList.contains("hidden")){
+    tickBubbles(ts/1000); drawBreak();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════
+//  BREAK ROOM — the hub. Everything the crew says is derived from what
+//  actually happened last shift, never from a script.
+// ══════════════════════════════════════════════════════════
+const CREW_NAMES = ["MARCUS", "DEE", "RAY", "TASH", "OKON", "BENNY"];
+const CREW_TINT  = ["#e0a86a", "#c98b6b", "#a9714f", "#d8a07d", "#8d5f42", "#e8bd93"];
+
+const META = {
+  day: 1,
+  credits: 0,
+  built: {},          // id -> true
+  last: null,         // telemetry from the previous shift
+  asked: {},          // upgrade id -> true, when a crew member has requested it
+  thanked: {},        // upgrade id -> true, once acknowledged
+  tables: 1,          // break room capacity gates headcount
+  seats: 3,
+  // crew persist between shifts, and can leave
+  roster: [
+    { name:"MARCUS", morale:78, tenure:0, notice:false },
+    { name:"DEE",    morale:74, tenure:0, notice:false },
+    { name:"RAY",    morale:80, tenure:0, notice:false },
+  ],
+  quit: [],           // names of people who walked
+  backlog: 0,         // mis-routed + dumped packages waiting in problem solve
+};
+const NEW_HIRES = ["TASH","OKON","BENNY","PRIYA","LUIS","JOJO"];
+
+// Morale is never a bar on screen. The crew tell you. Grumble, then warning,
+// then notice — so losing someone is always something you watched happen.
+const MOOD = { GRUMBLE: 46, WARNING: 26, NOTICE: 10 };
+
+const AMENITIES = [
+  { id:"vending",  name:"VENDING MACHINE",  cost:120, morale:3,
+    desc:"Snacks and cold drinks. The single most requested thing in any break room, anywhere." },
+  { id:"coffee",   name:"COFFEE MACHINE",   cost:100, morale:3,
+    desc:"A real one, not the jar of instant somebody left in 2019." },
+  { id:"microwave",name:"MICROWAVE",        cost:70,  morale:2,
+    desc:"Hot food on a night shift changes the whole mood of a room." },
+  { id:"chairs",   name:"DECENT CHAIRS",    cost:90,  morale:2,
+    desc:"Thirty minutes off your feet only counts if you can actually sit down." },
+  { id:"lockers",  name:"LOCKERS",          cost:80,  morale:2,
+    desc:"Somewhere to put your coat that isn't the back of a chair." },
+];
+const ROOM = [
+  { id:"table2", name:"SECOND TABLE",  cost:140, seats:2,
+    desc:"Two more seats. You cannot hire anyone you haven't got a seat for." },
+  { id:"table3", name:"THIRD TABLE",   cost:220, seats:2, needs:"table2",
+    desc:"Two more again. The room starts to feel like a proper break room." },
+];
+
+const UPGRADES = [
+  { id:"walkway", name:"OVERHEAD WALKWAY", cost:180,
+    desc:"A raised crossing over the middle of the floor. Cuts the walk between distant chutes roughly in half.",
+    apply(){ C.WALK_SPEED = Math.round(C.WALK_SPEED * 1.9); } },
+  { id:"vending", name:"VENDING MACHINE (FLOOR SIDE)", cost:120,
+    desc:"Put it on the floor rather than in the break room. Crew take their break where they stand instead of crossing the building.",
+    apply(){ C.EXCEPTION_CREW_TIME = Math.max(2, C.EXCEPTION_CREW_TIME - 2); C.LOAD_INTERVAL_STAFFED *= 0.93; } },
+  { id:"hire", name:"HIRE AN ASSOCIATE", cost:260, repeatable:true,
+    desc:"One more pair of hands — about +10% throughput, the biggest single lever there is. Needs a free seat in the break room.",
+    can(){ return META.roster.length < META.seats; },
+    blocked:"NO FREE SEAT — ADD A TABLE FIRST",
+    apply(){
+      const used = new Set(META.roster.map(r=>r.name));
+      const nm = NEW_HIRES.find(n=>!used.has(n)) || ("HIRE " + (META.roster.length+1));
+      META.roster.push({ name:nm, morale:70, tenure:0, notice:false });
+      syncRoster();
+    } },
+  { id:"deepchute", name:"DEEPEN THE CHUTES", cost:150,
+    desc:"Six packages to twelve. More buffer before anything recirculates.",
+    apply(){ C.CHUTE_CAPACITY = 12; } },
+  { id:"recirc", name:"RECIRCULATION LINE", cost:230,
+    desc:"A return loop back to the infeed. Nothing ever stalls the line again \u2014 blocked packages ride round and retry. But a blocked line also throttles what's coming in, and this removes that mercy: your chutes stay fuller and you lose more at departure. Measured at +9% for a rough shift and \u221213% for a clean one. It buys you a floor, not a ceiling.",
+    apply(){ C.RECIRC_LINE = true; } },
+  { id:"seconddoor", name:"SECOND DOCK DOOR", cost:200,
+    desc:"Swap trailers without killing the dock. Dead time after a departure drops from 18s to 8s.",
+    apply(){ C.DOCK_GAP_DURATION = 8; } },
+  { id:"scanner", name:"UPGRADE THE SCANNER", cost:110,
+    desc:"Fewer unreadable labels stopping the line at the scan point.",
+    apply(){ C.NOREAD_MIN = 34; C.NOREAD_MAX = 48; } },
+];
+
+function syncRoster(){ C.WORKER_COUNT = Math.max(1, META.roster.length); }
+
+// Morale moves for reasons the player can point at, never randomly.
+function settleMorale(){
+  const L = META.last; if(!L) return;
+  const amenityLift = AMENITIES.reduce((a,x)=> a + (META.built[x.id] ? x.morale : 0), 0);
+  const overcrowded = META.roster.length > META.seats;
+  META.roster.forEach((r, i) => {
+    let d = -1.5;                                  // the job is tiring
+    d += amenityLift;
+    const c = L.crew[i];
+    if(c && c.walkSec > 25) d -= 6;                // walked all shift
+    if(c && L.lanes[c.mainLane] && L.lanes[c.mainLane].fullSec > 30) d -= 5;  // drowning
+    if(L.halted > 40) d -= 4;                      // whole shift was chaos
+    if(L.shipped >= 175) d += 5;                   // good day, everyone feels it
+    if(overcrowded) d -= 8;                        // nowhere to sit on break
+    // clamp the per-shift swing so neglect is a slow slide you get to react to,
+    // never a nosedive — and so losing one person can't cascade into losing all
+    d = Math.max(-6, Math.min(8, d));
+    r.morale = Math.max(0, Math.min(100, r.morale + d));
+    r.tenure += 1;
+    // the last person standing never walks out — they ask for help instead
+    if(r.morale <= MOOD.NOTICE && META.roster.length > 1) r.notice = true;
+  });
+  // anyone who gave notice last shift and is still miserable actually leaves
+  const leaving = META.roster.filter(r => r.notice && r.morale <= MOOD.NOTICE && r.tenure > 1);
+  for(const r of leaving){
+    if(META.roster.length <= 1) break;             // never strand the player
+    META.roster = META.roster.filter(x => x !== r);
+    META.quit.push(r.name);
+    // the rest close ranks a little rather than spiralling
+    META.roster.forEach(x => { x.morale = Math.min(100, x.morale + 6); });
+  }
+  syncRoster();
+}
+
+// ---- turn last shift's numbers into things people say -------------------
+function buildDialogue(){
+  const L = META.last;
+  const out = [];
+  if(!L){
+    out.push({who:0, text:"First one. Point us where you want us and we'll shift it."});
+    out.push({who:1, text:"Just don't leave me on D all morning."});
+    return out;
+  }
+  const cand = [];
+  const R = META.roster;
+
+  // people who walked off. highest priority — you should feel this.
+  for(const nm of META.quit.splice(0)){
+    cand.push({p:20, who:0, mood:"bad", text: nm + " didn't come in. Left their vest on the table."});
+  }
+  // notice / warning / grumble — the morale gauge, spoken
+  if(R.length === 1 && R[0].morale <= MOOD.WARNING){
+    cand.push({p:19, who:0, mood:"bad",
+      text:"It's just me on the floor now. I'm not walking out on you, but I can't run this building alone. Get someone in."});
+  }
+  R.forEach((r,i)=>{
+    if(R.length === 1) return;                       // handled above
+    if(r.morale <= MOOD.NOTICE)
+      cand.push({p:19, who:i, mood:"bad",
+        text:"I'm handing my notice in. Nothing personal, this place just grinds you down."});
+    else if(r.morale <= MOOD.WARNING)
+      cand.push({p:16, who:i, mood:"bad",
+        text:"I'm about done with this. There's a room down the road with a kettle in it."});
+    else if(r.morale <= MOOD.GRUMBLE)
+      cand.push({p:12, who:i, mood:"low",
+        text:"Long week. There's nowhere to sit and nothing to eat, and then you want a record shift."});
+  });
+  if(META.roster.length > META.seats)
+    cand.push({p:17, who:1, mood:"bad",
+      text:"There's " + META.roster.length + " of us and " + META.seats
+           + " seats. Somebody's eating stood up every break."});
+
+  const walker = L.crew.slice().sort((a,b)=>b.walkSec - a.walkSec)[0];
+  if(walker && walker.walkSec > 22)
+    cand.push({p:9, who:walker.i, ask:"walkway",
+      text:"I was walking " + Math.round(walker.walkSec) + " seconds of that shift. Chute "
+           + LANE_NAME[walker.mainLane] + " to " + LANE_NAME[walker.farLane]
+           + " is the length of the building — can we get a walkway over the middle?"});
+  if(L.halted > 20)
+    cand.push({p:10, who:1, ask:"deepchute",
+      text:"We stood around for " + Math.round(L.halted) + " seconds waiting on the line. "
+           + "Chutes fill up and everything behind just stops."});
+  const buried = L.lanes.map((v,i)=>({i,v:v.fullSec})).sort((a,b)=>b.v-a.v)[0];
+  if(buried && buried.v > 25)
+    cand.push({p:8, who:2, ask:"deepchute",
+      text:"Chute " + LANE_NAME[buried.i] + " was buried for " + Math.round(buried.v)
+           + " seconds. Nothing would drop, it all just kept going round."});
+  const lonely = L.lanes.map((v,i)=>({i,v:v.unstaffedSec})).sort((a,b)=>b.v-a.v)[0];
+  if(lonely && lonely.v > 70)
+    cand.push({p:7, who:0,
+      text:"Nobody came to " + LANE_NAME[lonely.i] + " for " + Math.round(lonely.v)
+           + " seconds. I'm not doing that on my own again."});
+  if(L.blockSec > 25 && !META.built.recirc)
+    cand.push({p:13, who:2, ask:"recirc",
+      text:"Chute fills up and the whole line just stops dead behind it. Everything. "
+           + "Can we not get a return loop so it goes round instead of sitting there?"});
+  if(META.backlog >= 8)
+    cand.push({p:6, who:2,
+      text:"There's " + META.backlog + " sat in problem solve with nowhere to go. "
+           + "Somebody needs to get down there and sort them by hand."});
+  if(L.dumped > 10)
+    cand.push({p:6, who:2, ask:"scanner",
+      text:L.dumped + " went round twice and got pulled off. Problem solve is drowning down there."});
+  if(L.gapLoss > 14)
+    cand.push({p:5, who:1, ask:"seconddoor",
+      text:"Every time a trailer pulls out we're dead for eighteen seconds. Is there no second door?"});
+  if(!META.built.vending)
+    cand.push({p:3, who:(META.day % Math.max(1,R.length)), ask:"vending",
+      text:"Any chance of a vending machine in here? It's a long night on nothing."});
+  if(!META.built.coffee)
+    cand.push({p:3, who:(META.day+1) % Math.max(1,R.length), ask:"coffee",
+      text:"That instant coffee has been in the cupboard since before I started."});
+
+  if(L.shipped >= 175)
+    cand.push({p:11, who:0, mood:"good", text:"That's " + L.shipped + " out. Best we've run. Whatever you did, do it again."});
+  else if(L.shipped >= 145)
+    cand.push({p:4, who:2, mood:"good", text:L.shipped + " out. Tidy shift. Barely had to shout."});
+
+  // someone content and settled — earned, not free
+  const happy = R.map((r,i)=>({r,i})).filter(x=>x.r.morale > 80 && x.r.tenure > 2)[0];
+  if(happy) cand.push({p:4, who:happy.i, mood:"good",
+    text:"You know what, this is a decent room to come back to. Cheers for that."});
+
+  for(const u of UPGRADES.concat(AMENITIES, ROOM)){
+    if(META.built[u.id] && META.asked[u.id] && !META.thanked[u.id]){
+      META.thanked[u.id] = true;
+      cand.push({p:15, who:1, mood:"good", text:"You actually put the "
+        + u.name.toLowerCase().split(" (")[0] + " in. Makes a real difference — cheers."});
+    }
+  }
+  cand.sort((a,b)=>b.p-a.p);
+  const seen = new Set();
+  for(const c of cand){
+    if(out.length >= 4) break;
+    if(seen.has(c.who)) continue;
+    seen.add(c.who); out.push(c);
+    if(c.ask) META.asked[c.ask] = true;
+  }
+  return out;
+}
+
+// ---- the scene -----------------------------------------------------------
+const bcv = document.getElementById("brkCv"), bx = bcv.getContext("2d");
+const BW = 400, BH = 560;
+let bscale = 1, boffX = 0, boffY = 0, bubbles = [];
+
+function fitBreak(){
+  const st = document.getElementById("brkStage");
+  const w = st.clientWidth, h = st.clientHeight, dpr = window.devicePixelRatio || 1;
+  if(!w || !h) return;
+  bcv.width = w*dpr; bcv.height = h*dpr;
+  bscale = Math.min(w/BW, h/BH);
+  boffX = (w - BW*bscale)/2; boffY = (h - BH*bscale)/2;
+  bx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function drawPerson(g, px, py, tint, talking, scale, morale){
+  const k = scale || 1;
+  const m = morale === undefined ? 80 : morale;
+  const slump = m <= MOOD.WARNING ? 5*k : m <= MOOD.GRUMBLE ? 2.5*k : 0;
+  py += slump;
+  // chair back
+  g.fillStyle = META.built.chairs ? "#2b3d4d" : "#1a2029";
+  rrc(g, px-26*k, py-6*k, 52*k, 42*k, 5); g.fill();
+  // hi-vis vest
+  g.fillStyle = "#d8a72e"; rrc(g, px-24*k, py+2*k, 48*k, 44*k, 8); g.fill();
+  g.fillStyle = "#b8891f"; rrc(g, px-8*k, py+2*k, 16*k, 44*k, 4); g.fill();
+  // reflective bands
+  g.fillStyle = "#f0e2a8"; g.fillRect(px-24*k, py+18*k, 48*k, 4*k);
+  // head
+  g.fillStyle = tint; g.beginPath(); g.arc(px, py-14*k, 17*k, 0, Math.PI*2); g.fill();
+  // beanie
+  g.fillStyle = "#2f4858"; rrc(g, px-18*k, py-34*k, 36*k, 16*k, 7); g.fill();
+  // eyes on you
+  g.fillStyle = "#151a21";
+  g.beginPath(); g.arc(px-6*k, py-14*k, 2.3*k, 0, Math.PI*2); g.fill();
+  g.beginPath(); g.arc(px+6*k, py-14*k, 2.3*k, 0, Math.PI*2); g.fill();
+  g.strokeStyle = "#151a21"; g.lineWidth = 1.8*k; g.beginPath();
+  if(talking) g.arc(px, py-5*k, 4.4*k, 0, Math.PI);
+  else if(m <= MOOD.WARNING) g.arc(px, py+1*k, 4.4*k, Math.PI, 0);   // frown
+  else if(m > 80) g.arc(px, py-5*k, 4*k, 0.15, Math.PI-0.15);        // content
+  else { g.moveTo(px-4*k, py-4*k); g.lineTo(px+4*k, py-4*k); }
+  g.stroke();
+}
+function rrc(g,x,y,w,h,r){
+  g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath();
+}
+function bubble(g, cx, cy, text, w, mood){
+  g.font = "11px ui-monospace,monospace";
+  const words = text.split(" "); const lines = []; let cur = "";
+  for(const wd of words){
+    if(g.measureText(cur+" "+wd).width > w-18 && cur){ lines.push(cur); cur = wd; }
+    else cur = cur ? cur+" "+wd : wd;
+  }
+  if(cur) lines.push(cur);
+  const h = lines.length*14 + 16;
+  const x = Math.max(6, Math.min(BW-w-6, cx-w/2)), y = cy-h;
+  g.fillStyle = "rgba(0,0,0,.35)"; rrc(g, x+2, y+3, w, h, 8); g.fill();
+  g.fillStyle = mood === "bad" ? "#f7dedd" : mood === "good" ? "#ddf3e6" : "#eef2f6";
+  rrc(g, x, y, w, h, 8); g.fill();
+  g.beginPath(); g.moveTo(cx-6, y+h); g.lineTo(cx+6, y+h); g.lineTo(cx, y+h+9); g.closePath(); g.fill();
+  g.fillStyle = mood === "bad" ? "#5c1f21" : "#1a2029"; g.textAlign = "left";
+  lines.forEach((ln,i)=> g.fillText(ln, x+9, y+18+i*14));
+  return h;
+}
+
+// Bubbles surface one at a time on their own rhythm, linger, then fade —
+// so the room feels alive without animating anything in the scene itself.
+let bubblePool = [], bubbleIdx = 0, nextBubbleAt = 0;
+function tickBubbles(now){
+  for(let i = bubbles.length - 1; i >= 0; i--){
+    const b = bubbles[i], age = now - b.born;
+    b.alpha = age < 0.45 ? age/0.45
+            : age > b.life - 0.7 ? Math.max(0, (b.life - age)/0.7)
+            : 1;
+    if(age >= b.life) bubbles.splice(i, 1);
+  }
+  if(bubblePool.length && bubbles.length < 2 && now >= nextBubbleAt){
+    const line = bubblePool[bubbleIdx % bubblePool.length]; bubbleIdx++;
+    if(!bubbles.some(b => b.who === line.who)){
+      bubbles.push({ ...line, born: now, life: 5.5 + Math.random()*3.5, alpha: 0 });
+      nextBubbleAt = now + 1.6 + Math.random()*2.6;
+    } else nextBubbleAt = now + 0.6;
+  }
+}
+
+function drawBreak(){
+  const st = document.getElementById("brkStage");
+  if(!st.clientWidth) return;
+  bx.clearRect(0,0,st.clientWidth,st.clientHeight);
+  bx.save(); bx.translate(boffX, boffY); bx.scale(bscale, bscale);
+
+  const FLOOR = 432;
+  bx.fillStyle = "#222b36"; bx.fillRect(0,0,BW,FLOOR);
+  bx.fillStyle = "#161c24"; bx.fillRect(0,FLOOR,BW,BH-FLOOR);
+  bx.fillStyle = "#1a222c"; bx.fillRect(0,FLOOR-6,BW,6);
+
+  // window onto the floor
+  bx.fillStyle = "#0d1319"; rrc(bx, 228, 40, 152, 92, 5); bx.fill();
+  bx.strokeStyle = "#33404f"; bx.lineWidth = 4; rrc(bx, 228, 40, 152, 92, 5); bx.stroke();
+  bx.fillStyle = "#1c2731"; bx.fillRect(236, 104, 136, 20);
+  const cols = ["#4c9be8","#f2994a","#27ae9b","#b980e0"];
+  for(let i=0;i<5;i++){ bx.fillStyle = cols[i%4]; bx.fillRect(244+i*26, 86, 14, 14); }
+
+  // clock
+  bx.fillStyle = "#2b3441"; bx.beginPath(); bx.arc(52, 58, 24, 0, Math.PI*2); bx.fill();
+  bx.strokeStyle = "#39424f"; bx.lineWidth = 3; bx.stroke();
+  bx.strokeStyle = "#c3ccd6"; bx.lineWidth = 3;
+  bx.beginPath(); bx.moveTo(52,58); bx.lineTo(52,43); bx.stroke();
+  bx.lineWidth = 2.5; bx.beginPath(); bx.moveTo(52,58); bx.lineTo(63,62); bx.stroke();
+
+  // lockers
+  if(META.built.lockers){
+    bx.fillStyle = "#2c4a3c"; rrc(bx, 14, 150, 68, 146, 4); bx.fill();
+    bx.strokeStyle = "#3d6754"; bx.lineWidth = 2; rrc(bx, 14, 150, 68, 146, 4); bx.stroke();
+    for(let i=0;i<3;i++){
+      bx.strokeStyle = "#24382e"; bx.lineWidth = 2;
+      bx.beginPath(); bx.moveTo(14+i*22.6, 150); bx.lineTo(14+i*22.6, 296); bx.stroke();
+      bx.fillStyle = "#8fb3a1"; bx.fillRect(20+i*22.6, 218, 5, 5);
+    }
+  }
+
+  // vending machine
+  if(META.built.vending){
+    bx.fillStyle = "#243b4d"; rrc(bx, 92, 140, 56, 156, 6); bx.fill();
+    bx.strokeStyle = "#4c9be8"; bx.lineWidth = 3; rrc(bx, 92, 140, 56, 156, 6); bx.stroke();
+    const cc = ["#e5484d","#f2994a","#5ec98a","#4c9be8"];
+    for(let r=0;r<5;r++) for(let c2=0;c2<3;c2++){
+      bx.fillStyle = cc[(r+c2)%4]; bx.fillRect(100+c2*16, 150+r*22, 11, 15);
+    }
+    bx.fillStyle = "#0e1116"; bx.fillRect(100, 266, 43, 20);
+  } else {
+    bx.fillStyle = "#1f2630"; rrc(bx, 92, 140, 56, 156, 6); bx.fill();
+    bx.strokeStyle = "#2b3441"; bx.lineWidth = 2; rrc(bx, 92, 140, 56, 156, 6); bx.stroke();
+    bx.fillStyle = "#39424f"; bx.font = "700 9px ui-monospace,monospace"; bx.textAlign = "center";
+    bx.fillText("OUT OF", 120, 212); bx.fillText("ORDER", 120, 226);
+  }
+
+  // counter with coffee + microwave
+  bx.fillStyle = "#2e3a47"; rrc(bx, 156, 262, 68, 12, 3); bx.fill();
+  bx.fillStyle = "#26313c"; bx.fillRect(160, 274, 60, 22);
+  if(META.built.coffee){
+    bx.fillStyle = "#3a2b2b"; rrc(bx, 162, 232, 24, 30, 3); bx.fill();
+    bx.fillStyle = "#e5484d"; bx.fillRect(165, 236, 5, 4);
+    bx.fillStyle = "#c9a227"; bx.fillRect(166, 250, 16, 9);
+  }
+  if(META.built.microwave){
+    bx.fillStyle = "#2b3441"; rrc(bx, 192, 240, 30, 22, 3); bx.fill();
+    bx.fillStyle = "#12181f"; bx.fillRect(196, 244, 17, 14);
+    bx.fillStyle = "#5ec98a"; bx.fillRect(215, 244, 4, 3);
+  }
+
+  // ---- crew, tables, seats
+  const roster = META.roster;
+  const n = Math.min(roster.length, 7);
+  const spread = BW/(n+1);
+  const psc = n >= 6 ? 0.62 : n >= 5 ? 0.7 : n >= 4 ? 0.82 : 1;
+  for(let i=0;i<n;i++){
+    const px = spread*(i+1);
+    const r = roster[i];
+    const talking = bubbles.some(b => b.who === i);
+    drawPerson(bx, px, 344, CREW_TINT[i%CREW_TINT.length], talking, psc, r.morale);
+  }
+  // tables — drawn over them so they read as seated
+  const segs = Math.min(META.tables, 3);
+  const segW = (BW-12)/segs;
+  for(let t=0;t<segs;t++){
+    const x0 = 6 + t*segW + (segs>1 ? 3 : 0), w = segW - (segs>1 ? 6 : 0);
+    bx.fillStyle = "#33404f"; rrc(bx, x0, 392, w, 24, 5); bx.fill();
+    bx.fillStyle = "#3d4b5c"; bx.fillRect(x0, 392, w, 5);
+    bx.fillStyle = "#2a3542";
+    bx.fillRect(x0+14, 416, 12, 56); bx.fillRect(x0+w-26, 416, 12, 56);
+  }
+  for(let i=0;i<n;i++){
+    const px = spread*(i+1);
+    bx.fillStyle = "#cdd6e0"; rrc(bx, px+16*psc, 370, 13, 22, 3); bx.fill();
+    bx.fillStyle = "#6b4a2f"; bx.fillRect(px+18*psc, 373, 9, 5);
+    if(META.built.microwave && i===1){ bx.fillStyle = "#8a6a45"; rrc(bx, px-38, 376, 22, 16, 2); bx.fill(); }
+    bx.fillStyle = roster[i].morale <= MOOD.WARNING ? "#e5484d"
+                 : roster[i].morale <= MOOD.GRUMBLE ? "#e5a04d" : "#7d8794";
+    bx.font = "700 " + (n>=5?8:9) + "px ui-monospace,monospace"; bx.textAlign = "center";
+    bx.fillText(roster[i].name, px, 440);
+  }
+  // spare seats, so the hiring gate is visible in the room itself
+  const spare = Math.max(0, META.seats - n);
+  for(let k=0;k<spare;k++){
+    const px = spread*(n+1) + k*26;
+    if(px > BW-14) break;
+    bx.strokeStyle = "#2b3441"; bx.lineWidth = 2; bx.setLineDash([3,3]);
+    rrc(bx, px-11, 350, 22, 34, 4); bx.stroke(); bx.setLineDash([]);
+  }
+
+  // speech
+  let stackY = 292;
+  for(const b of bubbles){
+    const px = spread*(Math.min(b.who, n-1)+1);
+    bx.globalAlpha = b.alpha === undefined ? 1 : b.alpha;
+    const h = bubble(bx, px, stackY, b.text, 250, b.mood);
+    bx.globalAlpha = 1;
+    stackY -= (h + 10);
+    if(stackY < 30) stackY = 30;
+  }
+  bx.restore();
+}
+
+function showBreak(){
+  hideAll();
+  document.getElementById("break").classList.remove("hidden");
+  document.getElementById("brkDay").textContent = META.day;
+  document.getElementById("brkCred").textContent = META.credits;
+  const psBtn = document.getElementById("brkPS");
+  psBtn.classList.toggle("hidden", META.backlog < 8);
+  psBtn.textContent = "PROBLEM SOLVE (" + META.backlog + " WAITING)";
+  bubblePool = buildDialogue(); bubbles = []; bubbleIdx = 0; nextBubbleAt = 0;
+  requestAnimationFrame(()=>{ fitBreak(); drawBreak(); });
+}
+function hideAll(){
+  for(const id of ["start","break","design","lab","rep","psolve"])
+    document.getElementById(id).classList.add("hidden");
+}
+
+// ---- design screen -------------------------------------------------------
+function showDesign(){
+  hideAll();
+  document.getElementById("design").classList.remove("hidden");
+  const list = document.getElementById("upgList"); list.innerHTML = "";
+
+  const section = (title, note) => {
+    const h = document.createElement("div"); h.className = "sect";
+    h.textContent = title; list.appendChild(h);
+    if(note){ const p = document.createElement("div");
+      p.style.cssText = "font-size:10.5px;color:#8a93a0;line-height:1.5;margin:-4px 0 10px";
+      p.textContent = note; list.appendChild(p); }
+  };
+  const card = (u, extra) => {
+    const owned = !!META.built[u.id] && !u.repeatable;
+    const asked = !!META.asked[u.id] && !owned;
+    const gateOk = u.can ? u.can() : true;
+    const needOk = u.needs ? !!META.built[u.needs] : true;
+    const afford = META.credits >= u.cost;
+    const d = document.createElement("div");
+    d.className = "upg" + (asked ? " asked" : "") + (owned ? " owned" : "");
+    d.innerHTML =
+      '<div class="nm">' + u.name + (extra || "") + '</div>' +
+      (asked ? '<div class="ask">the crew asked for this</div>' : '') +
+      '<div class="ds">' + u.desc + '</div>' +
+      '<div class="bt"><div class="pr">' + (owned ? "INSTALLED" : u.cost + " cr") + '</div></div>';
+    if(!owned){
+      const btn = document.createElement("button");
+      btn.textContent = !needOk ? "LOCKED"
+        : !gateOk ? (u.blocked || "UNAVAILABLE")
+        : !afford ? "TOO DEAR" : "BUILD";
+      btn.disabled = !needOk || !gateOk || !afford;
+      btn.addEventListener("click", ()=>{
+        if(META.credits < u.cost) return;
+        META.credits -= u.cost;
+        if(!u.repeatable) META.built[u.id] = true;
+        u.apply ? u.apply() : null;
+        showDesign();
+      });
+      d.querySelector(".bt").appendChild(btn);
+    }
+    list.appendChild(d);
+  };
+
+  section("BREAK ROOM",
+    "Seats " + META.roster.length + "/" + META.seats +
+    ". Amenities hold morale up between shifts — without them people drift, then leave.");
+  for(const r of ROOM) card({ ...r, apply(){ META.tables += 1; META.seats += r.seats; } });
+  for(const a of AMENITIES) card(a, ' <span style="color:#5ec98a;font-size:10px">+' + a.morale + ' morale/shift</span>');
+
+  section("THE FLOOR", "Throughput. Measured effects, not guesses.");
+  for(const u of UPGRADES) card(u);
+}
+
+window.addEventListener("resize", ()=>{ fitBreak(); drawBreak(); });
+document.getElementById("brkStart").addEventListener("click", ()=>{ hideAll(); startRun(); });
+document.getElementById("brkDesign").addEventListener("click", showDesign);
+document.getElementById("designBack").addEventListener("click", showBreak);
+document.getElementById("brkLab").addEventListener("click", ()=>{
+  buildLab(); hideAll(); document.getElementById("lab").classList.remove("hidden");
+});
+
+
+// ══════════════════════════════════════════════════════════
+//  PROBLEM SOLVE — the pile of mis-routed freight your shift actually created.
+//  Untimed, no fail state. Solve it and those packages ship after all.
+// ══════════════════════════════════════════════════════════
+const PS = { bins: [], cap: 4, sel: -1, history: [], recover: 0, solvedAlready: false };
+
+// Solver used at generation time. Legal-move scrambling barely disturbs a solved
+// board (you can only stack like on like), so instead we shuffle properly and
+// verify — a board is only served once it's been proven solvable.
+function psSolvable(bins, cap, budget){
+  const key = b => b.map(x=>x.join(",")).sort().join("|");
+  const seen = new Set(), stack = [bins.map(x=>x.slice())];
+  let steps = 0;
+  while(stack.length){
+    const st = stack.pop();
+    if(++steps > (budget||40000)) return false;
+    if(st.every(x => x.length === 0 || (x.length === cap && x.every(v => v === x[0])))) return true;
+    const k = key(st); if(seen.has(k)) continue; seen.add(k);
+    for(let i = 0; i < st.length; i++){
+      if(!st[i].length) continue;
+      const c = st[i][st[i].length-1];
+      let n = 1; while(n < st[i].length && st[i][st[i].length-1-n] === c) n++;
+      for(let j = 0; j < st.length; j++){
+        if(i === j) continue;
+        const room = cap - st[j].length;
+        if(room <= 0) continue;
+        if(st[j].length && st[j][st[j].length-1] !== c) continue;
+        if(!st[j].length && n === st[i].length) continue;      // shuffling a whole bin sideways
+        const nx = st.map(x=>x.slice()), m = Math.min(n, room);
+        for(let q = 0; q < m; q++) nx[j].push(nx[i].pop());
+        stack.push(nx);
+      }
+    }
+  }
+  return false;
+}
+function psGenerate(packages){
+  const colours = Math.max(2, Math.min(4, Math.round(packages / PS.cap)));
+  for(let attempt = 0; attempt < 40; attempt++){
+    const pool = [];
+    for(let c = 0; c < colours; c++) for(let k = 0; k < PS.cap; k++) pool.push(c);
+    for(let i = pool.length-1; i > 0; i--){                     // Fisher-Yates
+      const j = Math.floor(Math.random()*(i+1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    const bins = [];
+    for(let c = 0; c < colours; c++) bins.push(pool.slice(c*PS.cap, (c+1)*PS.cap));
+    bins.push([], []);                                          // two free bins to work in
+    const trivial = bins.every(b => b.length === 0 || b.every(v => v === b[0]));
+    if(trivial) continue;
+    if(!psSolvable(bins, PS.cap)) continue;
+    PS.bins = bins;
+    PS.sel = -1; PS.history = []; PS.solvedAlready = false;
+    PS.recover = colours * PS.cap;
+    return;
+  }
+  // fallback: a simple two-colour swap that is always solvable
+  PS.bins = [[0,1,0,1],[1,0,1,0],[],[]];
+  PS.sel = -1; PS.history = []; PS.solvedAlready = false; PS.recover = 8;
+}
+function psTopRun(i){
+  const b = PS.bins[i];
+  if(!b.length) return 0;
+  const c = b[b.length-1]; let n = 1;
+  while(n < b.length && b[b.length-1-n] === c) n++;
+  return n;
+}
+function psSolved(){
+  return PS.bins.every(b => b.length === 0 ||
+    (b.length === PS.cap && b.every(v => v === b[0])));
+}
+function psTap(i){
+  if(PS.solvedAlready) return;
+  if(PS.sel === -1){
+    if(PS.bins[i].length) PS.sel = i;
+  } else if(PS.sel === i){
+    PS.sel = -1;
+  } else {
+    const from = PS.bins[PS.sel], to = PS.bins[i];
+    const c = from[from.length-1];
+    const room = PS.cap - to.length;
+    if(room > 0 && (to.length === 0 || to[to.length-1] === c)){
+      const n = Math.min(psTopRun(PS.sel), room);
+      PS.history.push({ from: PS.sel, to: i, n });
+      for(let k = 0; k < n; k++) to.push(from.pop());
+      PS.sel = -1;
+      if(psSolved()) psWin();
+    } else {
+      PS.sel = PS.bins[i].length ? i : -1;
+    }
+  }
+  psRender();
+}
+function psUndo(){
+  const m = PS.history.pop(); if(!m) return;
+  for(let k = 0; k < m.n; k++) PS.bins[m.from].push(PS.bins[m.to].pop());
+  PS.sel = -1; psRender();
+}
+function psWin(){
+  PS.solvedAlready = true;
+  META.credits += PS.recover;
+  META.backlog = Math.max(0, META.backlog - PS.recover);
+  document.getElementById("psSub").textContent =
+    "CLEARED — " + PS.recover + " PACKAGES RECOVERED AND SHIPPED";
+  document.getElementById("psSub").style.color = "#5ec98a";
+}
+function psRender(){
+  const wrap = document.getElementById("psWrap"); wrap.innerHTML = "";
+  PS.bins.forEach((b,i)=>{
+    const d = document.createElement("div");
+    const uniform = b.length === PS.cap && b.every(v => v === b[0]);
+    d.className = "bin" + (PS.sel === i ? " sel" : "") + (uniform ? " done" : "");
+    d.style.height = (PS.cap*30 + (PS.cap-1)*4 + 12) + "px";
+    const run = PS.sel === i ? psTopRun(i) : 0;
+    b.forEach((v,k)=>{
+      const el = document.createElement("i");
+      el.style.background = LANE_COL[v];
+      if(PS.sel === i && k >= b.length - run) el.className = "lift";
+      d.appendChild(el);
+    });
+    d.addEventListener("click", ()=> psTap(i));
+    wrap.appendChild(d);
+  });
+}
+function showProblemSolve(){
+  hideAll();
+  document.getElementById("psolve").classList.remove("hidden");
+  const sub = document.getElementById("psSub");
+  sub.style.color = "#7d8794";
+  if(!PS.bins.length || PS.solvedAlready){
+    psGenerate(META.backlog);
+    sub.textContent = "MIS-ROUTED PACKAGES FROM YOUR LAST SHIFT";
+  }
+  psRender();
+}
+document.getElementById("psUndo").addEventListener("click", psUndo);
+document.getElementById("psReset").addEventListener("click", ()=>{
+  while(PS.history.length) psUndo();
+});
+document.getElementById("psDone").addEventListener("click", showBreak);
+document.getElementById("brkPS").addEventListener("click", ()=>{ PS.bins = []; showProblemSolve(); });
+
+// ══════════════════════════════════════════════════════════
+//  LAB
+// ══════════════════════════════════════════════════════════
+const DEFAULTS = JSON.parse(JSON.stringify(C));
+const TOGGLES = [
+  ["WAVE_ENABLED",        "Inbound arrives in skewed waves (one trailer, one origin) instead of uniform noise"],
+  ["EXCEPTION_NEEDS_CREW","Clearing a jam or no-read pulls a crew member off loading for 5s"],
+];
+const SLIDERS = [
+  ["WORKER_COUNT",           2, 6,   1,   "Associates on shift"],
+  ["CHUTE_CAPACITY",         3, 14,  1,   "Chute depth (packages)"],
+  ["BELT_SLOTS",             8, 30,  1,   "Line length (slots)"],
+  ["MAX_WORKERS_PER_LANE",   1, 3,   1,   "Crew that fit at one chute"],
+  ["LOAD_INTERVAL_STAFFED",  0.6, 2.4, 0.1, "Sec per package, per person"],
+  ["DOCK_GAP_DURATION",      4, 30,  1,   "Dock dead time after departure"],
+  ["WALK_SPEED",            10, 120,  5,   "Crew walk speed (lower = longer walks)"],
+  ["SPAWN_INTERVAL_END",     0.25, 0.9, 0.05, "Peak inbound (sec/package)"],
+];
+function buildLab(){
+  const tw = document.getElementById("labToggles"); tw.innerHTML = "";
+  for(const [key, desc] of TOGGLES){
+    const d = document.createElement("div");
+    d.className = "tog" + (C[key] ? " on" : "");
+    d.innerHTML = '<div class="sw"></div><span>' + desc + '</span>';
+    d.addEventListener("click", ()=>{ C[key] = !C[key]; d.classList.toggle("on", !!C[key]); });
+    tw.appendChild(d);
+  }
+  const sw = document.getElementById("labSliders"); sw.innerHTML = "";
+  for(const [key, min, max, stp, label] of SLIDERS){
+    const row = document.createElement("div"); row.className = "lrow";
+    const lb = document.createElement("label"); lb.textContent = label;
+    const inp = document.createElement("input");
+    inp.type = "range"; inp.min = min; inp.max = max; inp.step = stp; inp.value = C[key];
+    const val = document.createElement("div"); val.className = "lv";
+    const show = ()=> val.textContent = (stp < 1 ? (+C[key]).toFixed(2) : C[key]);
+    inp.addEventListener("input", ()=>{
+      C[key] = parseFloat(inp.value);
+      if(key === "BELT_SLOTS") relayout();
+      show();
+    });
+    show();
+    row.appendChild(lb); row.appendChild(inp); row.appendChild(val); sw.appendChild(row);
+  }
+}
+document.getElementById("labBtn").addEventListener("click", ()=>{
+  buildLab();
+  document.getElementById("start").classList.add("hidden");
+  document.getElementById("lab").classList.remove("hidden");
+});
+document.getElementById("labReset").addEventListener("click", ()=>{
+  Object.assign(C, JSON.parse(JSON.stringify(DEFAULTS)));
+  for(const u of UPGRADES) if(META.built[u.id]) u.apply();   // keep what was built
+  buildLab();
+});
+document.getElementById("labStart").addEventListener("click", ()=>{ hideAll(); startRun(); });
+
+document.getElementById("go").addEventListener("click", showBreak);
+document.getElementById("again").addEventListener("click", showBreak);
+function startRun(){
+  newGame(); fit(); drawPool(); hud(); last = 0; acc = 0;
+}
+
+syncRoster();
+newGame(); fit(); drawPool(); hud();
+requestAnimationFrame(frame);
+
+// expose for automated testing
+window.__sim = { get S(){ return S; }, C, step, newGame, startRun, setAlloc, syncCrew, moveCrew, commitCrewToException, crewX, travelTime,
+  setLayout(a){ DROP_X = a.slice(); }, get DROP_X(){ return DROP_X; } };
+</script>
+</body>
+</html>

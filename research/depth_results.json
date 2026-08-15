@@ -1,0 +1,37 @@
+[
+ {
+  "label": "baseline (free exc, no travel)",
+  "static": 180,
+  "reactive": 228,
+  "departAware": 225,
+  "manifest": 213
+ },
+ {
+  "label": "travel only",
+  "static": 180,
+  "reactive": 207,
+  "departAware": 194,
+  "manifest": 198
+ },
+ {
+  "label": "crew-cost exc only",
+  "static": 124,
+  "reactive": 225,
+  "departAware": 217,
+  "manifest": 207
+ },
+ {
+  "label": "both",
+  "static": 124,
+  "reactive": 197,
+  "departAware": 177,
+  "manifest": 188
+ },
+ {
+  "label": "both, slow travel",
+  "static": 124,
+  "reactive": 181,
+  "departAware": 162,
+  "manifest": 178
+ }
+]

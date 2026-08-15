@@ -1,0 +1,58 @@
+[
+ {
+  "ws": 0,
+  "cross": 0,
+  "static": 180,
+  "reactive": 228,
+  "nearest": 228,
+  "plan": 219
+ },
+ {
+  "ws": 210,
+  "cross": 1,
+  "static": 180,
+  "reactive": 223,
+  "nearest": 224,
+  "plan": 216
+ },
+ {
+  "ws": 70,
+  "cross": 3,
+  "static": 180,
+  "reactive": 215,
+  "nearest": 216,
+  "plan": 210
+ },
+ {
+  "ws": 35,
+  "cross": 6,
+  "static": 180,
+  "reactive": 204,
+  "nearest": 209,
+  "plan": 201
+ },
+ {
+  "ws": 21,
+  "cross": 10,
+  "static": 180,
+  "reactive": 194,
+  "nearest": 193,
+  "plan": 191
+ },
+ {
+  "ws": 14,
+  "cross": 15,
+  "static": 180,
+  "reactive": 179,
+  "nearest": 182,
+  "plan": 177
+ },
+ {
+  "ws": 10,
+  "cross": 21,
+  "static": 180,
+  "reactive": 166,
+  "nearest": 162,
+  "plan": 164
+ }
+]

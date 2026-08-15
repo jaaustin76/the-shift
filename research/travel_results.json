@@ -1,0 +1,86 @@
+[
+ {
+  "travel": 0,
+  "heavy": 0.25,
+  "static": 192,
+  "static_react": 0.5,
+  "fillGreedy": 233,
+  "fillGreedy_react": 0.5,
+  "anticipate": 233,
+  "anticipate_react": 0.5,
+  "beltAware": 233,
+  "beltAware_react": 0.5
+ },
+ {
+  "travel": 0,
+  "heavy": 0.55,
+  "static": 175,
+  "static_react": 0.5,
+  "fillGreedy": 229,
+  "fillGreedy_react": 0.5,
+  "anticipate": 226,
+  "anticipate_react": 0.5,
+  "beltAware": 226,
+  "beltAware_react": 0.5
+ },
+ {
+  "travel": 0,
+  "heavy": 0.75,
+  "static": 152,
+  "static_react": 0.5,
+  "fillGreedy": 225,
+  "fillGreedy_react": 0.5,
+  "anticipate": 214,
+  "anticipate_react": 0.5,
+  "beltAware": 216,
+  "beltAware_react": 0.5
+ },
+ {
+  "travel": 1.5,
+  "heavy": 0.55,
+  "static": 175,
+  "static_react": 0.5,
+  "fillGreedy": 215,
+  "fillGreedy_react": 3,
+  "anticipate": 208,
+  "anticipate_react": 3,
+  "beltAware": 212,
+  "beltAware_react": 3
+ },
+ {
+  "travel": 2.5,
+  "heavy": 0.55,
+  "static": 175,
+  "static_react": 0.5,
+  "fillGreedy": 206,
+  "fillGreedy_react": 3,
+  "anticipate": 197,
+  "anticipate_react": 3,
+  "beltAware": 204,
+  "beltAware_react": 3
+ },
+ {
+  "travel": 2.5,
+  "heavy": 0.75,
+  "static": 152,
+  "static_react": 0.5,
+  "fillGreedy": 208,
+  "fillGreedy_react": 1.5,
+  "anticipate": 194,
+  "anticipate_react": 3,
+  "beltAware": 200,
+  "beltAware_react": 0.5
+ },
+ {
+  "travel": 4,
+  "heavy": 0.75,
+  "static": 152,
+  "static_react": 0.5,
+  "fillGreedy": 198,
+  "fillGreedy_react": 1.5,
+  "anticipate": 187,
+  "anticipate_react": 3,
+  "beltAware": 193,
+  "beltAware_react": 3
+ }
+]
