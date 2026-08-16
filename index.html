@@ -114,6 +114,12 @@
   .upg button:disabled{background:#262d38;color:#5a6472;}
   .upg.owned{opacity:.5;}
   #saveNotice{font-size:9.5px;color:#7d8794;text-align:center;padding:0 18px 6px;}
+  #floorStage{flex:1 1 auto;min-height:0;position:relative;}
+  #floorTray{display:flex;gap:8px;padding:10px 18px;}
+  #floorTray button{flex:1;padding:13px 0;border:2px solid #262d38;border-radius:6px;background:#141920;
+    color:#b6bec9;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;}
+  #floorTray button.armed{border-color:#4c9be8;background:#16232f;color:#e8ecf1;}
+  #floorMsg{font-size:10.5px;color:#e5a04d;text-align:center;padding:0 18px 4px;min-height:14px;}
 </style>
 </head>
 <body>
@@ -170,6 +176,7 @@
     <div id="brkBtns">
       <button class="btn" id="brkStart" style="margin-top:0">START SHIFT</button>
       <button class="btn" id="brkDesign" style="margin-top:0;background:#262d38;color:#b6bec9">DESIGN THE FLOOR</button>
+      <button class="btn" id="brkLayout" style="margin-top:0;background:#262d38;color:#b6bec9">REARRANGE THE LINE</button>
       <button class="btn hidden" id="brkPS" style="margin-top:0;background:#3d3320;color:#f2c94c">PROBLEM SOLVE</button>
       <button class="btn" id="brkLab" style="margin-top:0;background:transparent;color:#4a5361;padding:8px;font-size:11px">lab</button>
     </div>
@@ -191,6 +198,23 @@
     </div>
     <div style="padding:0 18px 20px">
       <button class="btn" id="psDone" style="margin-top:0">BACK TO THE BREAK ROOM</button>
+    </div>
+  </div>
+
+  <!-- LAYOUT EDITOR -->
+  <div class="screen hidden" id="floor" style="padding:0">
+    <div style="padding:16px 18px 4px">
+      <h1 style="font-size:19px">THE LAYOUT</h1>
+      <h2 id="floorSub" style="margin-bottom:0">TAP A PIECE, THEN TAP A CELL TO PLACE IT</h2>
+    </div>
+    <div id="floorStage"><canvas id="floorCv"></canvas></div>
+    <div id="floorMsg"></div>
+    <div id="floorTray">
+      <button class="pieceBtn" data-piece="straight">STRAIGHT</button>
+      <button class="pieceBtn" data-piece="curve">CURVE</button>
+    </div>
+    <div style="padding:0 18px 20px">
+      <button class="btn" id="floorDone" style="margin-top:0">BACK TO THE BREAK ROOM</button>
     </div>
   </div>
 
@@ -1753,6 +1777,197 @@ function drawBreak(){
   bx.restore();
 }
 
+// ══════════════════════════════════════════════════════════
+//  THE LAYOUT — rearranging the existing line. Tap a piece in the tray,
+//  then tap a cell to assign it there. Tap a placed curve with nothing
+//  armed to cycle its rotation. Tap a chute, then tap where to move it.
+//  Every cell already exists on the line — this never adds or removes
+//  capacity, only reshapes the same fixed-length belt, since growing it
+//  is K3's job and branching off it is K8's. Free to rearrange: you
+//  already own the belt, you're just moving it.
+// ══════════════════════════════════════════════════════════
+const floorCv = document.getElementById("floorCv"), floorCtx = floorCv.getContext("2d");
+let fScale = 1, fOffX = 0, fOffY = 0;
+function fitFloorEditor(){
+  const st = document.getElementById("floorStage");
+  const w = st.clientWidth, h = st.clientHeight, dpr = window.devicePixelRatio || 1;
+  if(!w || !h) return;
+  floorCv.width = w*dpr; floorCv.height = h*dpr;
+  fScale = Math.min(w/W, h/H);
+  fOffX = (w - W*fScale)/2; fOffY = (h - H*fScale)/2;
+  floorCtx.setTransform(dpr,0,0,dpr,0,0);
+}
+window.addEventListener("resize", ()=>{
+  if(!document.getElementById("floor").classList.contains("hidden")){ fitFloorEditor(); drawFloorEditor(); }
+});
+
+// Editor state only — never game state. Reset every time the screen opens.
+let fArmed = null;          // "straight" | "curve" | null
+let fMovingChute = -1;      // index into FLOOR.cells mid-move, or -1
+
+// A move is legal exactly when the resulting floor still has one scanner
+// and one chute per destination (isLegalFloor, already used to validate a
+// loaded save) and doesn't fold back over itself in 2D space — nothing
+// crosses yet (that's K8), so two cells landing on the same point isn't a
+// state the editor can produce.
+function hasSelfIntersection(cells){
+  const pos = computeFloorPositions(cells);
+  const seen = new Set();
+  for(const p of pos){
+    const key = Math.round(p.x) + "," + Math.round(p.y);
+    if(seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
+}
+function isLegalMove(cells){ return isLegalFloor(cells) && !hasSelfIntersection(cells); }
+
+function floorMsg(text){ document.getElementById("floorMsg").textContent = text; }
+
+// Which cell a tap landed on — the belt's own row, at the belt's own
+// coordinates, since the editor shows exactly the shape being built, not
+// a separate schematic with its own geometry to keep in sync.
+function cellAt(x, y){
+  if(Math.abs(y - BELT_Y) > 22) return -1;
+  const i = Math.round((x - SLOT0)/slotW() - 0.5);
+  return (i >= 0 && i < FLOOR.cells.length) ? i : -1;
+}
+
+function armPiece(kind){
+  fArmed = fArmed === kind ? null : kind;
+  fMovingChute = -1;
+  document.querySelectorAll(".pieceBtn").forEach(b => b.classList.toggle("armed", b.dataset.piece === fArmed));
+  floorMsg("");
+  drawFloorEditor();
+}
+
+function tapFloorCell(i){
+  const cell = FLOOR.cells[i];
+
+  // already picked up a chute: this tap is where it goes
+  if(fMovingChute >= 0){
+    if(i === fMovingChute){ fMovingChute = -1; drawFloorEditor(); return; }   // tap it again to cancel
+    const target = FLOOR.cells[i];
+    if(target.type === "chute" || target.type === "scanner"){
+      floorMsg("CAN'T PUT A CHUTE THERE — SOMETHING ELSE IS ALREADY FIXED THERE"); return;
+    }
+    const moving = FLOOR.cells[fMovingChute];
+    const trial = FLOOR.cells.map(c => ({...c}));
+    trial[i] = { ...target, type:"chute", dest: moving.dest };
+    trial[fMovingChute] = { ...moving, type:"straight", dest: undefined };
+    if(!isLegalMove(trial)){ floorMsg("THAT FOLDS THE LINE BACK OVER ITSELF"); return; }
+    META.floor = trial; relayout(); safeSave();
+    fMovingChute = -1; floorMsg(""); drawFloorEditor(); return;
+  }
+
+  // a chute, nothing armed: pick it up
+  if(cell.type === "chute" && !fArmed){ fMovingChute = i; floorMsg("TAP WHERE " + LANE_NAME[cell.dest] + " GOES — OR TAP IT AGAIN TO CANCEL"); drawFloorEditor(); return; }
+
+  // a curve, nothing armed: tap cycles to the NEXT LEGAL rotation, skipping
+  // over any that fold the belt onto itself rather than getting stuck
+  // retrying the same rejected one forever — a tap should always do
+  // something if anything legal is possible at all.
+  if(!fArmed && cell.type === "curve"){
+    const order = ["E","S","W","N"];
+    const start = order.indexOf(cell.dir);
+    let landed = null;
+    for(let step = 1; step <= 4; step++){
+      const dir = order[(start + step) % 4];
+      const trial = FLOOR.cells.map(c => ({...c}));
+      trial[i] = { ...cell, dir };
+      if(isLegalMove(trial)){ landed = trial; break; }
+    }
+    if(!landed){ floorMsg("NO ROTATION HERE WORKS WITHOUT MOVING SOMETHING ELSE FIRST"); return; }
+    META.floor = landed; relayout(); safeSave();
+    drawFloorEditor(); return;
+  }
+
+  // a tray piece is armed: assign it to this cell (never over a chute or the scanner)
+  if(fArmed){
+    if(cell.type === "chute" || cell.type === "scanner"){
+      floorMsg("THAT'S FIXED — MOVE THE CHUTE INSTEAD OF BUILDING OVER IT"); return;
+    }
+    const incoming = i > 0 ? FLOOR.cells[i-1].dir : "E";
+    const trial = FLOOR.cells.map(c => ({...c}));
+    if(fArmed === "straight"){
+      // a straight piece never turns — it just continues whatever
+      // heading already reached it
+      trial[i] = { col:cell.col, row:cell.row, type:"straight", rot:0, dir:incoming };
+    } else {
+      const order = ["E","S","W","N"];
+      trial[i] = { col:cell.col, row:cell.row, type:"curve", rot:0, dir: order.find(d => d !== incoming) };
+    }
+    if(!isLegalMove(trial)){ floorMsg("THAT FOLDS THE LINE BACK OVER ITSELF"); return; }
+    META.floor = trial; relayout(); safeSave();
+    drawFloorEditor(); return;
+  }
+
+  floorMsg("ARM A PIECE BELOW, OR TAP A CHUTE TO MOVE IT");
+}
+
+function floorToLogical(cx, cy){
+  const r = floorCv.getBoundingClientRect();
+  return { x: (cx - r.left - fOffX)/fScale, y: (cy - r.top - fOffY)/fScale };
+}
+function onFloorDown(e){
+  const t = e.touches ? e.touches[0] : e;
+  const p = floorToLogical(t.clientX, t.clientY);
+  const i = cellAt(p.x, p.y);
+  if(i >= 0){ tapFloorCell(i); e.preventDefault(); }
+}
+floorCv.addEventListener("touchstart", onFloorDown, {passive:false});
+floorCv.addEventListener("mousedown", onFloorDown);
+
+function drawFloorEditor(){
+  const st = document.getElementById("floorStage");
+  if(!st.clientWidth) return;
+  floorCtx.clearRect(0,0,st.clientWidth,st.clientHeight);
+  floorCtx.save();
+  floorCtx.translate(fOffX, fOffY); floorCtx.scale(fScale, fScale);
+  floorCtx.textAlign = "center";
+
+  const SW = slotW();
+  for(let i = 0; i < FLOOR.cells.length; i++){
+    const c = FLOOR.cells[i], pos = FLOOR.pos[i], ang = DIR_ANGLE[c.dir];
+    const selected = i === fMovingChute;
+    floorCtx.save();
+    floorCtx.translate(pos.x, pos.y); floorCtx.rotate(ang);
+    floorCtx.fillStyle = c.type === "chute" ? LANE_COL[c.dest]
+                        : c.type === "scanner" ? "#39424f"
+                        : c.type === "curve" ? "#2b3441"
+                        : (i % 2 ? "#171c24" : "#141920");
+    rrc(floorCtx, -SW/2+1.5, -16, SW-3, 32, 3); floorCtx.fill();
+    floorCtx.strokeStyle = selected ? "#f2c94c" : "rgba(255,255,255,.1)";
+    floorCtx.lineWidth = selected ? 2.5 : 1;
+    rrc(floorCtx, -SW/2+1.5, -16, SW-3, 32, 3); floorCtx.stroke();
+    floorCtx.restore();
+
+    if(c.type === "chute"){
+      floorCtx.fillStyle = "#0e1116"; floorCtx.font = "700 12px ui-monospace,monospace";
+      floorCtx.fillText(LANE_NAME[c.dest], pos.x, pos.y+4);
+    } else if(c.type === "scanner"){
+      floorCtx.fillStyle = "#9aa4b0"; floorCtx.font = "700 6.5px ui-monospace,monospace";
+      floorCtx.fillText("SCAN", pos.x, pos.y+3);
+    } else if(c.type === "curve"){
+      floorCtx.fillStyle = "#7d8794"; floorCtx.font = "700 13px ui-monospace,monospace";
+      floorCtx.fillText("↻", pos.x, pos.y+4);
+    }
+  }
+  floorCtx.restore();
+}
+
+function showFloorEditor(){
+  hideAll();
+  document.getElementById("floor").classList.remove("hidden");
+  fArmed = null; fMovingChute = -1;
+  document.querySelectorAll(".pieceBtn").forEach(b => b.classList.remove("armed"));
+  floorMsg("");
+  requestAnimationFrame(()=>{ fitFloorEditor(); drawFloorEditor(); });
+}
+document.getElementById("brkLayout").addEventListener("click", showFloorEditor);
+document.getElementById("floorDone").addEventListener("click", showBreak);
+document.querySelectorAll(".pieceBtn").forEach(b => b.addEventListener("click", ()=> armPiece(b.dataset.piece)));
+
 function showBreak(){
   hideAll();
   safeSave();
@@ -1767,7 +1982,7 @@ function showBreak(){
   requestAnimationFrame(()=>{ fitBreak(); drawBreak(); });
 }
 function hideAll(){
-  for(const id of ["start","break","design","lab","rep","psolve"])
+  for(const id of ["start","break","design","lab","rep","psolve","floor"])
     document.getElementById(id).classList.add("hidden");
 }
 
