@@ -160,6 +160,24 @@ physically. Settles the shape of K8 well past its one-paragraph roadmap entry:
   ready, it goes, and alternation resumes once both sides have one waiting again.
 - **Elevated / multi-level lines bypass a crossing entirely** — the expensive fix already
   named in K8's roadmap entry, for when strict alternation is costing more than it's worth.
+  This is the *package* bypass. There's a separate, *worker* bypass, below.
+- **A built conveyor blocks a worker's path, same as it would in a real building.** Once
+  the floor is real 2D geometry (K2 step 1, done — see `index.html`'s `FLOOR`), a branch
+  or crossing isn't just a line on a diagram, it's a physical thing standing between a
+  crew member and wherever they're walking to. If nothing stops them walking straight
+  through it, building a branch is free — no cost, no decision, and the whole reason
+  distance-based crew travel exists (K0/K1's one measured skill: restraint) stops holding
+  once there's anything on the floor besides one straight line.
+- **Ladders / platforms are the fix — bought and built** (ties directly to the parked
+  *Installation lead time* idea in `BACKLOG.md`; this is exactly the kind of purchase that
+  idea was for), letting a worker cross *over* a conveyor instead of detouring around it.
+  Without one, the walk to a crossing point is a real, possibly long, path through open
+  floor — not a shortcut, an actual cost the player chose by where they built.
+- **Consequence for later, not now:** crew walk time stops being straight-line distance
+  between two chute X-positions (`travelTime()` today) and becomes a path through open
+  floor space that a built conveyor can block and a ladder/platform can cross. Only bites
+  once there's more than one line on the floor to be in the way — the first K2 slice
+  (one straight line, no branches yet) doesn't need this, but whoever builds branches does.
 - **Ladder logic, later still, replaces the fixed alternation rule** with something the
   player writes — e.g. let 3 through before yielding. This is the existing parked Ladder
   Logic idea, given its first concrete hook into a system that needs it.
