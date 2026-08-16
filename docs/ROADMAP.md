@@ -126,6 +126,49 @@ stage, and possibly a product of its own. Researched: `docs/BACKLOG.md`.
 
 ---
 
+## Design notes — taking shape, not yet scheduled
+
+Not a kernel yet, and not a `BACKLOG.md` one-liner either — this is for ideas that have
+been brainstormed out in enough detail to build from once their kernel comes up, so that
+detail doesn't have to be reconstructed from chat history later. Add to it as design
+conversations land somewhere real; don't build from it early.
+
+### K8 — Contention: branching and the merge gate
+
+From a brainstorm on what building a second line into an existing chute actually means
+physically. Settles the shape of K8 well past its one-paragraph roadmap entry:
+
+- **A branch is a second physical path to one chute**, built from the main line using the
+  same piece kit as everything else in K2 (starts straight, curves added as needed). It
+  carries packages of any size — this is about giving a chute a second door, not about
+  sorting by package attribute. Separate idea, not this one: size-specific lanes at the
+  *induction* point (storage / inbound trucks), which would exist upstream of all of this.
+  Parked independently — see `BACKLOG.md`.
+- **The merge point is a staging slot, not the chute itself.** One package, sitting right
+  before the chute, fed by both the main line's divert and the branch. It drops into the
+  chute automatically whenever the chute has room — this part is unchanged from how a
+  divert works today. Upgradeable to hold up to 3, independent of the chute's own capacity
+  (e.g. a 10-capacity chute might have a 1-, and later 3-, capacity staging slot in front
+  of it).
+- **The branch needs a manual release; the main line doesn't.** Admitting the *branch's*
+  next package into the staging slot is a tap — that's the actual arbitration point,
+  since two sources now feed one slot. The main line keeps auto-feeding as it always has.
+  An upgrade later automates the branch's release too.
+- **Where two lines actually cross** (not merging into a shared chute, but crossing paths
+  outright), the default is strict alternation — A, B, A, B — one package at a time. It
+  does not idle-wait on a turn that has nothing behind it: if only one side has a package
+  ready, it goes, and alternation resumes once both sides have one waiting again.
+- **Elevated / multi-level lines bypass a crossing entirely** — the expensive fix already
+  named in K8's roadmap entry, for when strict alternation is costing more than it's worth.
+- **Ladder logic, later still, replaces the fixed alternation rule** with something the
+  player writes — e.g. let 3 through before yielding. This is the existing parked Ladder
+  Logic idea, given its first concrete hook into a system that needs it.
+- **Explicitly deferred, not part of this:** package weight/size affecting belt speed and
+  jam rate. Territory of `K6 — Non-conveyables`; wait for that kernel rather than building
+  it here.
+
+---
+
 ## The rule about this document
 
 **One kernel at a time. Finish it, play it, then move.** If a kernel isn't playable, it
