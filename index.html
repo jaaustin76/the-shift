@@ -314,22 +314,73 @@ function slotX(i){ return SLOT0 + i*slotW() + slotW()/2; }
 // again later. Piece types match the K2 piece kit named in ROADMAP.md:
 // straight, chute, dock (scanner is its own marker, not in that list, since
 // it's fixed infrastructure a player doesn't place).
+// Every cell also carries `dir` — which way the path leaves that cell to
+// reach the next one (E/N/S/W, a compass step on the grid). A "curve" piece
+// is just a cell whose `dir` differs from the one before it; the walk below
+// doesn't need to know piece types at all, only `dir`, so it already works
+// for any future piece kit without changing again. Today's default is a
+// straight line, so every cell is 'E' and nothing about position changes.
 function defaultFloor(){
   const n = C.BELT_SLOTS;
   const cells = [];
-  for(let col = 0; col < n; col++) cells.push({ col, row:0, type:"straight", rot:0 });
-  cells[Math.max(1, Math.round(n*0.17))] = { col:Math.max(1, Math.round(n*0.17)), row:0, type:"scanner", rot:0 };
+  for(let col = 0; col < n; col++) cells.push({ col, row:0, type:"straight", rot:0, dir:"E" });
+  cells[Math.max(1, Math.round(n*0.17))] = { col:Math.max(1, Math.round(n*0.17)), row:0, type:"scanner", rot:0, dir:"E" };
   for(let k = 0; k < 4; k++){
     const col = Math.round(n*(0.34 + k*0.19));
-    cells[col] = { col, row:0, type:"chute", rot:0, dest:k };
+    cells[col] = { col, row:0, type:"chute", rot:0, dest:k, dir:"E" };
   }
   return { cells };
 }
+
+// Unit step for each compass direction, and the on-screen rotation a belt
+// tile needs to point that way (canvas Y increases downward, so "south" is
+// a positive rotation). Both keyed the same way `dir` is stored on a cell.
+const DIR_VEC   = { E:{dx:1,dy:0}, W:{dx:-1,dy:0}, N:{dx:0,dy:-1}, S:{dx:0,dy:1} };
+const DIR_ANGLE = { E:0, W:Math.PI, N:-Math.PI/2, S:Math.PI/2 };
+
+// Walks FLOOR.cells from a fixed start point, one grid step per cell, to
+// get every cell's actual on-screen centre. Physics never calls this — it
+// only ever works in 1D "distance along the path" (see posAt below), which
+// is all a straight line needed and all a curved one needs too. Only
+// rendering needs an actual point to draw at.
+function computeFloorPositions(cells){
+  const w = slotW();
+  let x = SLOT0 + w/2, y = BELT_Y;
+  return cells.map(c => {
+    const here = { x, y };
+    const dv = DIR_VEC[c.dir];
+    x += dv.dx*w; y += dv.dy*w;
+    return here;
+  });
+}
+
+// Converts a 1D "distance along the path" value — the same units p.x,
+// DROP_X and SCANNER_X already use, straight from the physics — into an
+// actual on-screen point, by finding which cell that distance falls in and
+// offsetting from its centre along its own direction. For today's straight
+// layout this reproduces {x:d, y:BELT_Y} exactly, the same point the old
+// direct-pixel math always drew at; it only starts producing a bent point
+// once a cell's `dir` actually turns.
+function posAt(d){
+  const cells = FLOOR.cells, pos = FLOOR.pos, w = slotW();
+  const iF = (d - SLOT0)/w - 0.5;
+  const i = Math.max(0, Math.min(cells.length - 1, Math.round(iF)));
+  const along = (iF - i) * w;
+  // A curve piece's turn happens exactly at its own centre, not before it —
+  // so approaching that centre still travels in whatever direction got you
+  // there (the previous cell's), and only the far side uses this cell's own
+  // direction. Using this cell's direction on both sides would bend the
+  // path half a slot too early.
+  const dv = DIR_VEC[along < 0 && i > 0 ? cells[i-1].dir : cells[i].dir];
+  return { x: pos[i].x + dv.dx*along, y: pos[i].y + dv.dy*along };
+}
+
 let FLOOR = null;
 function relayout(){
   FLOOR = defaultFloor();
   C.PKG_SPACING = slotW();
   C.PKG_SIZE = Math.max(6, slotW()*0.87);
+  FLOOR.pos = computeFloorPositions(FLOOR.cells);
   SCANNER_X = slotX(FLOOR.cells.find(c => c.type === "scanner").col);
   DROP_X = [0,1,2,3].map(k => slotX(FLOOR.cells.find(c => c.type === "chute" && c.dest === k).col));
 }
@@ -720,13 +771,20 @@ function onDown(e){
   const t = e.touches ? e.touches[0] : e;
   const p = toLogical(t.clientX, t.clientY);
 
-  // jam? (hold)
-  if(S.jam && Math.abs(p.x - S.jam.x) < 26 && Math.abs(p.y - BELT_Y) < 30){
-    S.holding = true; e.preventDefault(); return;
+  // jam? (hold) — hit-test against posAt(), the same point it's drawn at,
+  // so a tap still lands correctly once the belt isn't a straight line.
+  if(S.jam){
+    const jpos = posAt(S.jam.x);
+    if(Math.abs(p.x - jpos.x) < 26 && Math.abs(p.y - jpos.y) < 30){
+      S.holding = true; e.preventDefault(); return;
+    }
   }
   // no-read package? (tap)
-  if(S.noread && Math.abs(p.x - S.noread.x) < 20 && Math.abs(p.y - BELT_Y) < 30){
-    openRoute(); e.preventDefault(); return;
+  if(S.noread){
+    const nrpos = posAt(S.noread.x);
+    if(Math.abs(p.x - nrpos.x) < 20 && Math.abs(p.y - nrpos.y) < 30){
+      openRoute(); e.preventDefault(); return;
+    }
   }
   const L = laneAt(p.x, p.y);
   if(L >= 0){
@@ -824,80 +882,108 @@ function draw(){
   ctx.font = "700 7px ui-monospace,monospace"; ctx.textAlign = "center";
   ctx.fillText("IN", 17, BELT_Y+2);
 
-  // ── belt
+  // ── belt — drawn one grid cell at a time, each tile translated and rotated
+  // to its own cell's position and direction, rather than one long straight
+  // rectangle. For today's straight default every cell's direction is the
+  // same ('E'), so this draws pixel-for-pixel what the old single rectangle
+  // did; the per-cell approach is what lets a future curved cell bend the
+  // strip instead of needing a second rendering path once curves exist.
+  // The soft outer backing panel stays a straight bounding box for now —
+  // purely decorative, and there's no curved layout yet to see it not
+  // hug a bend, so that polish waits for when curves are actually placeable.
   const SW = slotW();
   ctx.fillStyle = "#1a1f27";
   rr(SLOT0-5, BELT_Y-19, C.BELT_SLOTS*SW+10, 38, 5); ctx.fill();
-  for(let i = 0; i < C.BELT_SLOTS; i++){
-    const x0 = SLOT0 + i*SW;
+  for(let i = 0; i < FLOOR.cells.length; i++){
+    const pos = FLOOR.pos[i], ang = DIR_ANGLE[FLOOR.cells[i].dir];
+    ctx.save();
+    ctx.translate(pos.x, pos.y); ctx.rotate(ang);
     ctx.fillStyle = i % 2 ? "#171c24" : "#141920";
-    ctx.fillRect(x0+0.6, BELT_Y-16, SW-1.2, 32);
+    ctx.fillRect(-SW/2+0.6, -16, SW-1.2, 32);
     ctx.strokeStyle = "#252d38"; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(x0, BELT_Y-16); ctx.lineTo(x0, BELT_Y+16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-SW/2, -16); ctx.lineTo(-SW/2, 16); ctx.stroke();
+    ctx.restore();
   }
-  ctx.strokeStyle = "#252d38"; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(SLOT0+C.BELT_SLOTS*SW, BELT_Y-16);
-  ctx.lineTo(SLOT0+C.BELT_SLOTS*SW, BELT_Y+16); ctx.stroke();
+  {
+    const lastI = FLOOR.cells.length - 1;
+    const pos = FLOOR.pos[lastI], ang = DIR_ANGLE[FLOOR.cells[lastI].dir];
+    ctx.save();
+    ctx.translate(pos.x, pos.y); ctx.rotate(ang);
+    ctx.strokeStyle = "#252d38"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(SW/2, -16); ctx.lineTo(SW/2, 16); ctx.stroke();
+    ctx.restore();
+  }
 
-  // ── scanner post
+  // ── scanner post — sits at posAt(SCANNER_X), the same point a package
+  // riding to SCANNER_X actually stops at, not a separately-tracked spot.
+  const scanPos = posAt(SCANNER_X);
   ctx.strokeStyle = "#39424f"; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(SCANNER_X, BELT_Y-18); ctx.lineTo(SCANNER_X, BELT_Y+18); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(scanPos.x, scanPos.y-18); ctx.lineTo(scanPos.x, scanPos.y+18); ctx.stroke();
   ctx.fillStyle = "#4a5361"; ctx.font = "6px ui-monospace,monospace";
-  ctx.fillText("SCAN", SCANNER_X, BELT_Y-22);
+  ctx.fillText("SCAN", scanPos.x, scanPos.y-22);
 
-  // ── drop chutes down from belt
+  // ── drop chutes down from belt — connector starts at posAt(DROP_X[i]),
+  // the belt's actual divert point, and still drops straight down to a
+  // fixed chute body below. Chute bodies following a curved approach angle
+  // is future work; nothing places a curve near a chute yet to need it.
   for(let i = 0; i < C.LANE_COUNT; i++){
+    const dropPos = posAt(DROP_X[i]);
     ctx.strokeStyle = "#242b35"; ctx.lineWidth = 8;
-    ctx.beginPath(); ctx.moveTo(DROP_X[i], BELT_Y+8); ctx.lineTo(DROP_X[i], CHUTE_TOP-4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(dropPos.x, dropPos.y+8); ctx.lineTo(DROP_X[i], CHUTE_TOP-4); ctx.stroke();
   }
 
   const blLane = blockingLane();
   const pulse = 0.5 + 0.5*Math.sin(S.t*7);
 
-  // ── packages
+  // ── packages — drawn at posAt(p.x), the belt's actual on-screen point for
+  // that physics distance, so a package visibly rides the same bent path
+  // the belt itself now draws. Physics (p.x, DROP_X, collision, spacing)
+  // never changed — it's still the same 1D distance-along-path math it
+  // always was; only where that distance is drawn on screen is new.
   for(const p of S.packages){
+    const ppos = posAt(p.x);
     const blocked = !p.noread && Math.abs(p.x - DROP_X[p.dest]) < 1.2
                     && S.lanes[p.dest].count >= C.CHUTE_CAPACITY;
     if(p.noread){
       const hs2 = C.PKG_SIZE/2;
       ctx.fillStyle = "#8b93a0";
-      rr(p.x-hs2, BELT_Y-hs2, C.PKG_SIZE, C.PKG_SIZE, 3); ctx.fill();
+      rr(ppos.x-hs2, ppos.y-hs2, C.PKG_SIZE, C.PKG_SIZE, 3); ctx.fill();
       ctx.fillStyle = "#0e1116"; ctx.font = "700 15px ui-monospace,monospace";
-      ctx.fillText("?", p.x, BELT_Y+5.5);
+      ctx.fillText("?", ppos.x, ppos.y+5.5);
       ctx.strokeStyle = "#f2c94c"; ctx.lineWidth = 2.5;
       ctx.beginPath();
-      ctx.arc(p.x, BELT_Y, hs2+5, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(p.expire/C.NOREAD_EXPIRE));
+      ctx.arc(ppos.x, ppos.y, hs2+5, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(p.expire/C.NOREAD_EXPIRE));
       ctx.stroke();
     } else {
       const hs = C.PKG_SIZE/2;
-      drawParcel(p.x, BELT_Y, C.PKG_SIZE, LANE_COL[p.dest], p.kind);
+      drawParcel(ppos.x, ppos.y, C.PKG_SIZE, LANE_COL[p.dest], p.kind);
       if(blocked){
         ctx.strokeStyle = p.blocked ? "rgba(229,72,77," + (0.6+0.4*pulse) + ")" : ALARM;
         ctx.lineWidth = 3;
-        rr(p.x-hs-2.5, BELT_Y-hs-2.5, C.PKG_SIZE+5, C.PKG_SIZE+5, 4); ctx.stroke();
+        rr(ppos.x-hs-2.5, ppos.y-hs-2.5, C.PKG_SIZE+5, C.PKG_SIZE+5, 4); ctx.stroke();
       }
     }
   }
 
-  // ── jam
+  // ── jam — same posAt(j.x) treatment as everything else riding the belt.
   if(S.jam){
-    const j = S.jam;
+    const j = S.jam, jpos = posAt(j.x);
     ctx.fillStyle = ALARM;
-    rr(j.x-9, BELT_Y-13, 18, 26, 3); ctx.fill();
+    rr(jpos.x-9, jpos.y-13, 18, 26, 3); ctx.fill();
     ctx.fillStyle = "#fff"; ctx.font = "700 12px ui-monospace,monospace";
-    ctx.fillText("!", j.x, BELT_Y+4);
+    ctx.fillText("!", jpos.x, jpos.y+4);
     if(S.holding){
       ctx.strokeStyle = "#5ec98a"; ctx.lineWidth = 3.5;
       ctx.beginPath();
-      ctx.arc(j.x, BELT_Y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(j.hold/C.JAM_CLEAR_HOLD));
+      ctx.arc(jpos.x, jpos.y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(j.hold/C.JAM_CLEAR_HOLD));
       ctx.stroke();
     } else {
       ctx.strokeStyle = "rgba(229,72,77,.35)"; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(j.x, BELT_Y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - j.age/C.JAM_AUTO_CLEAR));
+      ctx.arc(jpos.x, jpos.y, 18, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - j.age/C.JAM_AUTO_CLEAR));
       ctx.stroke();
       ctx.fillStyle = ALARM; ctx.font = "700 7px ui-monospace,monospace";
-      ctx.fillText("HOLD", j.x, BELT_Y+30);
+      ctx.fillText("HOLD", jpos.x, jpos.y+30);
     }
   }
 
