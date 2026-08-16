@@ -298,12 +298,40 @@ const SLOT0 = 18;
 // so nothing can ever overlap however long you build it.
 function slotW(){ return (BELT_X1 - SLOT0) / C.BELT_SLOTS; }
 function slotX(i){ return SLOT0 + i*slotW() + slotW()/2; }
+
+// ── THE FLOOR — the belt as placed data, not a formula. K2's whole point is
+// that a player arranges this; for now it's generated to reproduce today's
+// fixed straight-line layout exactly, cell for cell, so nothing about how
+// the game plays or measures changes yet. This is step one of K2: making
+// the layout inspectable, editable data before anything is actually
+// editable. Real chute placement, curves and the piece-kit UI come next,
+// once this is proven to change nothing on its own.
+//
+// Every cell sits at a (col,row) on a grid, row 0 only for now since
+// nothing bends yet — curves are the next piece type this unlocks, not this
+// step's job. `rot` (0/90/180/270) is carried on every cell already, unused
+// until piece rotation is a real editor feature, so it doesn't need adding
+// again later. Piece types match the K2 piece kit named in ROADMAP.md:
+// straight, chute, dock (scanner is its own marker, not in that list, since
+// it's fixed infrastructure a player doesn't place).
+function defaultFloor(){
+  const n = C.BELT_SLOTS;
+  const cells = [];
+  for(let col = 0; col < n; col++) cells.push({ col, row:0, type:"straight", rot:0 });
+  cells[Math.max(1, Math.round(n*0.17))] = { col:Math.max(1, Math.round(n*0.17)), row:0, type:"scanner", rot:0 };
+  for(let k = 0; k < 4; k++){
+    const col = Math.round(n*(0.34 + k*0.19));
+    cells[col] = { col, row:0, type:"chute", rot:0, dest:k };
+  }
+  return { cells };
+}
+let FLOOR = null;
 function relayout(){
+  FLOOR = defaultFloor();
   C.PKG_SPACING = slotW();
   C.PKG_SIZE = Math.max(6, slotW()*0.87);
-  const n = C.BELT_SLOTS;
-  SCANNER_X = slotX(Math.max(1, Math.round(n*0.17)));
-  DROP_X = [0,1,2,3].map(k => slotX(Math.round(n*(0.34 + k*0.19))));
+  SCANNER_X = slotX(FLOOR.cells.find(c => c.type === "scanner").col);
+  DROP_X = [0,1,2,3].map(k => slotX(FLOOR.cells.find(c => c.type === "chute" && c.dest === k).col));
 }
 let SCANNER_X = 0;
 let DROP_X = [0,0,0,0];
