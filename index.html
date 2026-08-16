@@ -375,11 +375,31 @@ function posAt(d){
   return { x: pos[i].x + dv.dx*along, y: pos[i].y + dv.dy*along };
 }
 
+// FLOOR.cells is now META.floor directly, not a fresh generation every
+// call — once a player can edit it, it's intent, same as an owned upgrade,
+// and belongs in the save exactly like everything else in META. Falls back
+// to a fresh default whenever META.floor is missing, its length doesn't
+// match C.BELT_SLOTS (an old/corrupt save, or the lab's BELT_SLOTS slider,
+// which is a testing tool and isn't expected to preserve a hand-arranged
+// floor across a length change), or it isn't a legal floor at all — one
+// scanner and exactly one chute per destination. Nothing can build an
+// illegal floor through play yet, but a hand-edited save could, and the
+// rule is the same as anywhere else a save doesn't match what's expected:
+// discarded, not crashed on.
+function isLegalFloor(cells){
+  if(!Array.isArray(cells)) return false;
+  if(cells.filter(c => c && c.type === "scanner").length !== 1) return false;
+  for(let k = 0; k < 4; k++)
+    if(cells.filter(c => c && c.type === "chute" && c.dest === k).length !== 1) return false;
+  return true;
+}
 let FLOOR = null;
 function relayout(){
-  FLOOR = defaultFloor();
   C.PKG_SPACING = slotW();
   C.PKG_SIZE = Math.max(6, slotW()*0.87);
+  if(!META.floor || META.floor.length !== C.BELT_SLOTS || !isLegalFloor(META.floor))
+    META.floor = defaultFloor().cells;
+  FLOOR = { cells: META.floor };
   FLOOR.pos = computeFloorPositions(FLOOR.cells);
   SCANNER_X = slotX(FLOOR.cells.find(c => c.type === "scanner").col);
   DROP_X = [0,1,2,3].map(k => slotX(FLOOR.cells.find(c => c.type === "chute" && c.dest === k).col));
@@ -402,7 +422,8 @@ const LANE_NAME = ["A","B","C","D"];
 // long enough that a queue is a fraction of it — i.e. alongside the overview camera.
 // Capacity is now literally the number of slots you can see and count.
 Object.defineProperty(C, "LINE_CAPACITY", { get(){ return C.BELT_SLOTS; } });
-relayout();
+// relayout() itself moved to just before newGame() at the bottom of the
+// script — it now reads META.floor, and META doesn't exist yet this early.
 const LANE_COL  = ["#4c9be8","#f2994a","#27ae9b","#b980e0"];
 const ALARM = "#e5484d";
 
@@ -1260,6 +1281,7 @@ function freshMeta(){
     ],
     quit: [],           // names of people who walked
     backlog: 0,         // mis-routed + dumped packages waiting in problem solve
+    floor: defaultFloor().cells,   // the arranged belt — a fresh career starts at today's layout
   };
 }
 const META = freshMeta();
@@ -1353,8 +1375,8 @@ let storageOK = false;
 // the whole META object, so a field added to META later doesn't silently
 // start getting persisted without that being a decision.
 function pickMeta(){
-  const { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last } = META;
-  return { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last };
+  const { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last, floor } = META;
+  return { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last, floor };
 }
 
 function safeSave(){
@@ -2027,10 +2049,13 @@ function startRun(){
 // A save, if one exists and is a shape this build understands, replaces the
 // day-one META before anything else runs. applyOwnedUpgrades() then rebuilds
 // C's upgrade effects on top of DEFAULTS — a harmless no-op when nothing's
-// owned, which is exactly the fresh-career case.
+// owned, which is exactly the fresh-career case. relayout() has to run
+// after safeLoad(), not before — it reads META.floor, so a loaded custom
+// arrangement has to already be in place by the time it runs.
 safeLoad();
 applyOwnedUpgrades();
 syncRoster();
+relayout();
 newGame(); fit(); drawPool(); hud();
 requestAnimationFrame(frame);
 
@@ -2044,6 +2069,7 @@ window.__sim = { get S(){ return S; }, C, step, newGame, startRun, setAlloc, syn
     Object.assign(C, JSON.parse(JSON.stringify(DEFAULTS)));
     Object.assign(META, freshMeta());
     syncRoster();
+    relayout();   // META.floor just reset too — FLOOR/DROP_X/SCANNER_X have to catch up
   } };
 </script>
 </body>
