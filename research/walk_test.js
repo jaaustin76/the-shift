@@ -1,11 +1,12 @@
 // Does DISTANCE-BASED travel (vs flat) restore the value of anticipation?
 // Key ratio: time to cross the floor vs time for a chute to overflow (~10s at peak).
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
   const out = await pg.evaluate(() => {
     const {startRun, step, setAlloc, commitCrewToException, C} = window.__sim;
@@ -42,6 +43,7 @@ const { chromium } = require('playwright');
     };
 
     function run(mode, react, walkSpeed, seed){
+      window.__sim.resetCareer();   // see THE TESTING TRAP in CLAUDE.md
       C.WALK_SPEED = walkSpeed; C.WAVE_ENABLED = true; C.MANIFEST_LEAD = true;
       _s=seed>>>0; startRun();
       const S=window.__sim.S; S.running=true;
@@ -92,6 +94,6 @@ const { chromium } = require('playwright');
       String(r.nearest).padStart(8), String(r.plan).padStart(9),
       ('   '+(w>=0?'+':'')+w+' ('+(100*w/Math.max(r.reactive,r.nearest)).toFixed(1)+'%)').padStart(17));
   }
-  require('fs').writeFileSync('/home/claude/walk_results.json', JSON.stringify(out,null,1));
+  require('fs').writeFileSync(path.join(__dirname, 'walk_results.json'), JSON.stringify(out,null,1));
   await b.close();
 })();

@@ -1,19 +1,19 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message)); pg.on('console',m=>{if(m.type()==='error')errs.push(m.text());});
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(300);
   const r = await pg.evaluate(() => {
     const {startRun, step, C} = window.__sim;
     function run(smart){
       // endShift() settles morale, so a long benchmark quietly starves itself of
-      // crew. Reset the roster every run or later iterations measure understaffing.
-      META.roster = [{name:'A',morale:80,tenure:0,notice:false},
-                     {name:'B',morale:80,tenure:0,notice:false},
-                     {name:'C',morale:80,tenure:0,notice:false}];
-      META.quit = []; syncRoster();
+      // crew. Start each run from a clean, fully-staffed career via the
+      // storage-free reset hook, or later iterations measure understaffing
+      // instead of the thing under test. See THE TESTING TRAP in CLAUDE.md.
+      window.__sim.resetCareer();
       startRun(); const S = window.__sim.S; S.running = true;
       let g=0;
       while(S.running && g<20000){

@@ -1,13 +1,15 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844}, deviceScaleFactor:2 });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(300);
   await pg.click('#go'); await pg.waitForTimeout(200);
   // build a busy, legible mid-shift state with BOTH exceptions live
   await pg.evaluate(() => {
+    window.__sim.resetCareer();
     const S = window.__sim.S, C = window.__sim.C;
     for(let i=0;i<2600;i++) window.__sim.step(1/60);
     S.lanes[0].workers=2; S.lanes[1].workers=1; S.lanes[2].workers=0; S.lanes[3].workers=0; S.freeWorkers=0;

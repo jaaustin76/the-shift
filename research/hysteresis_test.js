@@ -1,11 +1,12 @@
 // Walking punishes thrashing. Does "commitment" (only move when the gain clearly
 // beats the walk) become a real skill the old game didn't have?
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
   const out = await pg.evaluate(() => {
     const {startRun, step, setAlloc, commitCrewToException, C} = window.__sim;
@@ -15,6 +16,7 @@ const { chromium } = require('playwright');
       if(S.t<S.lanes[i].gapUntil)continue; if(S.lanes[i].count<bv){bv=S.lanes[i].count;bi=i;}} return bi;};
 
     function run(react, hyst, walkSpeed, seed){
+      window.__sim.resetCareer();   // see THE TESTING TRAP in CLAUDE.md
       C.WALK_SPEED = walkSpeed;
       _s=seed>>>0; startRun();
       const S=window.__sim.S; S.running=true;

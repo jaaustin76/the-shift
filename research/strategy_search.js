@@ -2,6 +2,7 @@
 // Question: is there a simple dominant strategy that trivialises the game?
 // Secondary: does execution speed matter, or only strategy?
 const { chromium } = require('playwright');
+const path = require('path');
 
 const POLICIES = [];
 
@@ -24,11 +25,11 @@ for (const mode of MODES)
       }
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = [];
   pg.on('pageerror', e => errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
 
   const SEEDS = 12;
@@ -79,6 +80,7 @@ for (const mode of MODES)
     }
 
     function run(p, seed) {
+      window.__sim.resetCareer();   // see THE TESTING TRAP in CLAUDE.md
       _s = seed >>> 0;
       startRun();
       const S = window.__sim.S;
@@ -148,7 +150,7 @@ for (const mode of MODES)
 
   console.log('errors:', errs.length ? errs : 'none');
   console.log('policies tested:', out.length, '| seeds each:', 12);
-  require('fs').writeFileSync('/home/claude/strategy_results.json', JSON.stringify(out, null, 1));
+  require('fs').writeFileSync(path.join(__dirname, 'strategy_results.json'), JSON.stringify(out, null, 1));
 
   const byShip = [...out].sort((a, b) => b.shipped - a.shipped);
   console.log('\n=== TOP 12 ===');

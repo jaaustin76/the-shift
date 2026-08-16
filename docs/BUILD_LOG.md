@@ -4,6 +4,51 @@ Every call I made without you, why, and what you should push back on.
 
 ---
 
+## K1 — persistence: calls made along the way
+
+**All 15 `research/*.js` harnesses that target `index.html` pointed at a path that no
+longer exists** (`file:///home/claude/the_shift.html`, a leftover from wherever this was
+first built). None of them could actually run in this repo as committed. Since the task
+was explicitly to make every harness call the new `resetCareer()` hook, and a harness
+that can't launch can't call anything, I fixed the path in all 15 — now built from
+`__dirname` so it works regardless of where the repo is checked out — plus pointed
+`chromium.launch()` at this environment's pre-installed browser
+(`/opt/pw-browsers/chromium`) instead of the version Playwright would otherwise try to
+download. Four harnesses (`depth_test.js`, `travel_test.js`, `walk_test.js`,
+`strategy_search.js`) also wrote their results JSON to the same dead `/home/claude/`
+directory; redirected those into `research/` alongside the results files already checked
+in there. `prototypes/shift_dispatch.html`'s harness (`dispatch_test.js`) targets a
+separate, older prototype file with no `META`/break-room system at all — left untouched,
+it was never affected by any of this.
+
+**The documented benchmark has drifted.** `CLAUDE.md` states passive ~70 / skilled ~146.
+Measured repeatedly, both before and after the persistence changes, the actual current
+build lands at passive ~55-64 / skilled ~134-138 — consistently, run after run, on the
+*unmodified* pre-K1 code too. So this isn't something I introduced; it's a pre-existing
+gap between the documented figure and what the current physics (slot grid, hard blocking,
+crew walk) actually produce. I didn't touch the documented number — that felt like a
+decision for you, not a side effect of a persistence PR — but the two builds (before and
+after my changes) match each other closely, which is the thing that actually mattered for
+this kernel: no regression.
+
+**`layout_test.js` needed a narrower reset than everywhere else.** Every other harness
+calls the full `resetCareer()` (resets `C` and `META` together) once per shift. This file
+can't: each of its 11 structural conditions sets a deliberate override — e.g.
+`C.WORKER_COUNT = 4` for "hire a 4th associate" — that has to survive across all 16 seeds
+of that condition, and `resetCareer()` would wipe it back to defaults every single seed.
+So the per-seed reset here is just `Object.assign(META, freshMeta())`, no `syncRoster()`
+and no touching `C` — enough to stop morale/attrition from bleeding across seeds as pure
+noise, without touching the thing the test is actually measuring. Verified this doesn't
+silently break the override: "hire a 4th associate" still ships more than baseline and
+"down to 2 associates" still ships less.
+
+**Committed `package.json` / `package-lock.json`.** Neither existed before; `npm i
+playwright` (per the Testing section in `CLAUDE.md`) generated them fresh. Pinning the
+version means the next person's install is reproducible instead of whatever `npm i
+playwright` happens to resolve on the day they run it.
+
+---
+
 ## The big one: I stopped after the strategy search
 
 **You asked for four things.** I delivered the strategy search and the tuning lab, and deliberately did **not** build the feel pass or the escalation test.

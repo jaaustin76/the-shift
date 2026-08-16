@@ -1,11 +1,12 @@
 // Final test of the travel idea: asymmetric floor geometry + strongly concentrated
 // demand + distance travel. Does PRE-POSITIONING finally beat reacting?
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
   const out = await pg.evaluate(() => {
     const {startRun, step, setAlloc, commitCrewToException, C} = window.__sim;
@@ -31,6 +32,7 @@ const { chromium } = require('playwright');
     };
 
     function run(mode, react, walkSpeed, heavy, layout, seed){
+      window.__sim.resetCareer();   // see THE TESTING TRAP in CLAUDE.md
       C.WALK_SPEED = walkSpeed; C.WAVE_ENABLED = true; C.MANIFEST_LEAD = true;
       C.WAVE_HEAVY = heavy; C.WAVE_SECOND = Math.min(0.2,(1-heavy)/2);
       window.__sim.setLayout(layout);

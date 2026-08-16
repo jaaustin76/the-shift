@@ -1,15 +1,21 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
   const out = await pg.evaluate(() => {
     const {startRun, step, setAlloc, C} = window.__sim;
     let _s=1; const srand=()=>{_s=(_s*1664525+1013904223)>>>0;return _s/4294967296;};
     const real=Math.random; Math.random=srand;
-    function run(skilled, seed){
+    function run(skilled, seed, a, b2, cap){
+      // Reset first, then reapply this sweep's own C overrides — resetCareer()
+      // rebuilds C from DEFAULTS, so it has to run before a/b2/cap are set,
+      // not after. See THE TESTING TRAP in CLAUDE.md.
+      window.__sim.resetCareer();
+      C.SPAWN_INTERVAL_START=a; C.SPAWN_INTERVAL_END=b2; C.CHUTE_CAPACITY=cap;
       _s=seed>>>0; startRun();
       const S=window.__sim.S; S.running=true;
       let g=0,next=0,last=null;
@@ -37,10 +43,9 @@ const { chromium } = require('playwright');
       [1.55,0.68,6],[1.35,0.55,6],[1.35,0.55,8],[1.20,0.48,8],[1.10,0.40,8],[1.10,0.40,10],
     ];
     for(const [a,b2,cap] of CASES){
-      C.SPAWN_INTERVAL_START=a; C.SPAWN_INTERVAL_END=b2; C.CHUTE_CAPACITY=cap;
       let p={sh:0,in:0,blk:0}, s={sh:0,in:0,blk:0};
-      for(let k=0;k<SEEDS;k++){ const r=run(false,1000+k*7919); p.sh+=r.sh; p.in+=r.in; p.blk+=r.blk; }
-      for(let k=0;k<SEEDS;k++){ const r=run(true,1000+k*7919); s.sh+=r.sh; s.in+=r.in; s.blk+=r.blk; }
+      for(let k=0;k<SEEDS;k++){ const r=run(false,1000+k*7919,a,b2,cap); p.sh+=r.sh; p.in+=r.in; p.blk+=r.blk; }
+      for(let k=0;k<SEEDS;k++){ const r=run(true,1000+k*7919,a,b2,cap); s.sh+=r.sh; s.in+=r.in; s.blk+=r.blk; }
       res.push({a,b:b2,cap, pass:Math.round(p.sh/SEEDS), skill:Math.round(s.sh/SEEDS),
         inb:Math.round(s.in/SEEDS), pblk:Math.round(p.blk/SEEDS), sblk:Math.round(s.blk/SEEDS)});
     }

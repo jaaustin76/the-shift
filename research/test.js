@@ -1,11 +1,12 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844}, deviceScaleFactor:2 });
   const errs = [];
   pg.on('console', m => { if(m.type()==='error') errs.push(m.text()); });
   pg.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(600);
 
   // start
@@ -15,6 +16,7 @@ const { chromium } = require('playwright');
   // headless fast-forward: PASSIVE (never touch anything)
   const passive = await pg.evaluate(() => {
     const {startRun, step, C} = window.__sim;
+    window.__sim.resetCareer();
     startRun();
     const S = window.__sim.S;
     S.running = true;
@@ -26,6 +28,7 @@ const { chromium } = require('playwright');
   // SMART: pre-drain before departures + prioritise fullest
   const smart = await pg.evaluate(() => {
     const {startRun, step, C} = window.__sim;
+    window.__sim.resetCareer();
     startRun();
     const S = window.__sim.S;
     S.running = true;
@@ -56,7 +59,7 @@ const { chromium } = require('playwright');
   });
 
   // verify report renders
-  await pg.evaluate(() => { window.__sim.startRun(); const S = window.__sim.S; S.running=true;
+  await pg.evaluate(() => { window.__sim.resetCareer(); window.__sim.startRun(); const S = window.__sim.S; S.running=true;
     let g=0; while(S.running && g<20000){ window.__sim.step(1/60); g++; } });
   await pg.waitForTimeout(400);
   const repVisible = await pg.isVisible('#rep');

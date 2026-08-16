@@ -1,14 +1,20 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
 
   const res = await pg.evaluate(() => {
     const {startRun, step, C} = window.__sim;
     const out = [];
-    function run(smart){
+    function run(smart, un, cap){
+      // Reset first, then reapply this sweep's own C overrides — resetCareer()
+      // rebuilds C from DEFAULTS, so it has to run before un/cap are set, not
+      // after. See THE TESTING TRAP in CLAUDE.md.
+      window.__sim.resetCareer();
+      C.LOAD_INTERVAL_UNSTAFFED = un; C.CHUTE_CAPACITY = cap;
       startRun(); const S = window.__sim.S; S.running = true;
       let g = 0;
       while (S.running && g < 20000) {
@@ -34,11 +40,10 @@ const { chromium } = require('playwright');
     }
     for (const un of [9,6,4.5,3.5,3,2.5]){
       for (const cap of [6,8]){
-        C.LOAD_INTERVAL_UNSTAFFED = un; C.CHUTE_CAPACITY = cap;
         // average 3 runs each to smooth randomness
         let p=0,ph=0,s=0;
-        for(let k=0;k<3;k++){ const a=run(false); p+=a.shipped; ph+=a.halted; }
-        for(let k=0;k<3;k++){ const a=run(true);  s+=a.shipped; }
+        for(let k=0;k<3;k++){ const a=run(false, un, cap); p+=a.shipped; ph+=a.halted; }
+        for(let k=0;k<3;k++){ const a=run(true, un, cap);  s+=a.shipped; }
         out.push({un, cap, passive:Math.round(p/3), halt:Math.round(ph/3), smart:Math.round(s/3),
                   gain: Math.round(100*((s/3)-(p/3))/(p/3))});
       }

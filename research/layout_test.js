@@ -1,11 +1,12 @@
 // Decisive test: do STRUCTURAL choices (what a build phase controls) swing the
 // outcome more than in-shift POLICY choices? If so, the depth lives in the build.
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
   const out = await pg.evaluate(() => {
     const {startRun, step, setAlloc, commitCrewToException, C} = window.__sim;
@@ -15,6 +16,12 @@ const { chromium } = require('playwright');
       if(S.t<S.lanes[i].gapUntil)continue; if(S.lanes[i].count<bv){bv=S.lanes[i].count;bi=i;}} return bi;};
 
     function run(seed){                      // always the best known policy: greedy
+      // Roster/morale only — not the full resetCareer(), which would also
+      // reset C and wipe out the structural override this condition is
+      // testing (e.g. C.WORKER_COUNT for the associate-count rows). Without
+      // this, morale drift and attrition across the 16 seeds of one
+      // condition would be pure noise on top of the thing being measured.
+      Object.assign(META, freshMeta());
       _s=seed>>>0; startRun();
       const S=window.__sim.S; S.running=true;
       let g=0,nextReact=0,jamSeen=null,nrSeen=null;
@@ -37,10 +44,13 @@ const { chromium } = require('playwright');
     const SEEDS=16;
     const mean=()=>{let s=0;for(let i=0;i<SEEDS;i++)s+=run(1000+i*7919);return Math.round(s/SEEDS);};
 
-    const base={CHUTE_CAPACITY:C.CHUTE_CAPACITY, LINE_CAPACITY:C.LINE_CAPACITY,
-      WORKER_COUNT:C.WORKER_COUNT, LOAD_INTERVAL_STAFFED:C.LOAD_INTERVAL_STAFFED,
-      DOCK_GAP_DURATION:C.DOCK_GAP_DURATION, MAX_WORKERS_PER_LANE:C.MAX_WORKERS_PER_LANE};
-    const reset=()=>Object.assign(C,base);
+    // Resets both the structural knobs under test and META/roster. Each
+    // structural condition runs 16 shifts back to back (mean()'s SEEDS
+    // loop) with no reset in between, so without this, morale drift and
+    // attrition from an earlier condition would bleed into the next one and
+    // this decisive test would be measuring the wrong thing. See THE
+    // TESTING TRAP in CLAUDE.md.
+    const reset=()=>window.__sim.resetCareer();
 
     const res=[];
     reset(); res.push({name:'BASELINE (current layout)', v:mean()});

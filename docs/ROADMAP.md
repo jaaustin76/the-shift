@@ -18,7 +18,7 @@ real telemetry. Problem solve puzzle built from your own mis-routes.
 
 ---
 
-## K1 — The career becomes real
+## K1 — The career becomes real ✅ DONE
 
 **Adds:** persistence. Credits, upgrades, roster, morale, tables, seats, backlog and day
 count all survive a reload.
@@ -29,7 +29,14 @@ three shifts for a walkway — all of it is built and none of it is reachable. T
 smallest item on the list and it makes everything already built testable for the first time.
 
 **Playable:** you can run a career of twenty shifts and find out whether the break room
-loop actually works. That question is currently unanswerable.
+loop actually works. That question was previously unanswerable — now it's open.
+
+Saves intent (`META`), never derived state (`C`): buying an upgrade is persisted as
+`META.built[id]`, and `C` is rebuilt from a `DEFAULTS` snapshot plus a replay of owned
+upgrades' `apply()` on every load, so a tuning change always reaches existing careers.
+`window.__sim.resetCareer()` is the storage-free reset every `research/` harness now
+calls before a shift, so a stray save can never silently starve a benchmark of crew —
+see THE TESTING TRAP in `CLAUDE.md`.
 
 ---
 

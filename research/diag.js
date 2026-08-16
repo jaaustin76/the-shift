@@ -1,11 +1,13 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(300);
   const tl = await pg.evaluate(() => {
     const {startRun, step, C} = window.__sim;
+    window.__sim.resetCareer();
     C.LOAD_INTERVAL_UNSTAFFED = 3.0;
     startRun(); const S = window.__sim.S; S.running = true;
     const rows = []; let g = 0, nextLog = 0;

@@ -1,9 +1,10 @@
 const { chromium } = require('playwright');
+const path = require('path');
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport:{width:390,height:844} });
   const errs=[]; pg.on('pageerror',e=>errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
 
   const out = await pg.evaluate(() => {
@@ -23,13 +24,10 @@ const { chromium } = require('playwright');
       }
     }
     function scenario(buyAmenities){
-      // reset
-      META.day=1; META.credits=0; META.built={}; META.asked={}; META.thanked={};
-      META.tables=1; META.seats=3; META.quit=[]; META.last=null;
-      META.roster=[{name:"MARCUS",morale:78,tenure:0,notice:false},
-                   {name:"DEE",morale:74,tenure:0,notice:false},
-                   {name:"RAY",morale:80,tenure:0,notice:false}];
-      syncRoster();
+      // Each scenario is deliberately 10 shifts run back to back, to watch
+      // morale drift over a career — so the reset happens once here, at the
+      // start of the scenario, not per shift.
+      window.__sim.resetCareer();
       const log=[];
       for(let d=1;d<=10;d++){
         playShift();

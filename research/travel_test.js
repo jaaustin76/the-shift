@@ -1,12 +1,13 @@
 // Does worker travel time restore the value of anticipation?
 // Compares a purely reactive policy against an anticipatory one across travel costs.
 const { chromium } = require('playwright');
+const path = require('path');
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
 
   const out = await pg.evaluate(() => {
@@ -43,6 +44,7 @@ const { chromium } = require('playwright');
     };
 
     function run(modeName, react, travel, seed) {
+      window.__sim.resetCareer();   // see THE TESTING TRAP in CLAUDE.md
       C.WORKER_TRAVEL_TIME = travel;
       _s = seed >>> 0;
       startRun();
@@ -108,6 +110,6 @@ const { chromium } = require('playwright');
       ('  ' + (worth >= 0 ? '+' : '') + worth + ' pkgs (' +
         (100 * worth / r.fillGreedy).toFixed(1) + '%)').padStart(22));
   }
-  require('fs').writeFileSync('/home/claude/travel_results.json', JSON.stringify(out, null, 1));
+  require('fs').writeFileSync(path.join(__dirname, 'travel_results.json'), JSON.stringify(out, null, 1));
   await b.close();
 })();

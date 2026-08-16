@@ -1,12 +1,13 @@
 // Do manifest foresight + crew-consuming exceptions create real strategic depth?
 // Depth = a policy that uses information beyond current queue state beats greedy.
 const { chromium } = require('playwright');
+const path = require('path');
 
 (async () => {
-  const b = await chromium.launch();
+  const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
   const pg = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; pg.on('pageerror', e => errs.push(e.message));
-  await pg.goto('file:///home/claude/the_shift.html');
+  await pg.goto('file://' + path.join(__dirname, '..', 'index.html'));
   await pg.waitForTimeout(400);
 
   const out = await pg.evaluate(() => {
@@ -45,6 +46,10 @@ const { chromium } = require('playwright');
     };
 
     function run(modeName, react, seed, excCrew, travel) {
+      // Fresh, fully-staffed career every shift — endShift() settles morale,
+      // so without this the sweep quietly starves itself of crew partway
+      // through. See THE TESTING TRAP in CLAUDE.md.
+      window.__sim.resetCareer();
       C.EXCEPTION_NEEDS_CREW = excCrew;
       C.WORKER_TRAVEL_TIME = travel;
       _s = seed >>> 0;
@@ -121,6 +126,6 @@ const { chromium } = require('playwright');
       String(r.manifest).padStart(9),
       ('   ' + (worth >= 0 ? '+' : '') + worth + ' (' + (100 * worth / r.reactive).toFixed(1) + '%)').padStart(18));
   }
-  require('fs').writeFileSync('/home/claude/depth_results.json', JSON.stringify(out, null, 1));
+  require('fs').writeFileSync(path.join(__dirname, 'depth_results.json'), JSON.stringify(out, null, 1));
   await b.close();
 })();

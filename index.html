@@ -113,6 +113,7 @@
     font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.06em;}
   .upg button:disabled{background:#262d38;color:#5a6472;}
   .upg.owned{opacity:.5;}
+  #saveNotice{font-size:9.5px;color:#7d8794;text-align:center;padding:0 18px 6px;}
 </style>
 </head>
 <body>
@@ -164,6 +165,7 @@
       <div><div class="d">SHIFT</div><div class="v" id="brkDay">1</div></div>
       <div style="text-align:right"><div class="d">CREDITS</div><div class="v" id="brkCred" style="color:#5ec98a">0</div></div>
     </div>
+    <div id="saveNotice" class="hidden">Progress isn't saving — this browser is blocking storage.</div>
     <div id="brkStage"><canvas id="brkCv"></canvas></div>
     <div id="brkBtns">
       <button class="btn" id="brkStart" style="margin-top:0">START SHIFT</button>
@@ -211,6 +213,7 @@
     <div id="labSliders"></div>
     <button class="btn" id="labStart" style="margin-top:16px">START SHIFT WITH THESE</button>
     <button class="btn" id="labReset" style="margin-top:9px;background:#262d38;color:#b6bec9">RESET TO DEFAULTS</button>
+    <button class="btn" id="labNewCareer" style="margin-top:20px;background:#3a1f22;color:#e5a3a3">START A NEW CAREER</button>
   </div>
 
   <!-- REPORT -->
@@ -276,6 +279,11 @@ const C = {
   BELT_SLOTS: 12,                // how long the line is. Everything else follows from this.
   PKG_SPACING: 31,               // recomputed from BELT_SLOTS; kept for the collision check
 };
+// Snapshot of C at load, before any upgrade or lab tweak touches it. Every
+// load-time upgrade replay and the lab's reset button rebuild C from this,
+// so a save only ever stores which upgrades are owned, never their effect on
+// C — a tuning change always reaches existing careers.
+const DEFAULTS = JSON.parse(JSON.stringify(C));
 
 // logical canvas space
 const W = 400, H = 660;
@@ -1071,6 +1079,7 @@ function endShift(){
   META.backlog += S.missorted + S.dumped;
   META.day += 1;
   settleMorale();
+  safeSave();
 
   document.getElementById("rep").classList.remove("hidden");
 }
@@ -1117,24 +1126,29 @@ function frame(ts){
 const CREW_NAMES = ["MARCUS", "DEE", "RAY", "TASH", "OKON", "BENNY"];
 const CREW_TINT  = ["#e0a86a", "#c98b6b", "#a9714f", "#d8a07d", "#8d5f42", "#e8bd93"];
 
-const META = {
-  day: 1,
-  credits: 0,
-  built: {},          // id -> true
-  last: null,         // telemetry from the previous shift
-  asked: {},          // upgrade id -> true, when a crew member has requested it
-  thanked: {},        // upgrade id -> true, once acknowledged
-  tables: 1,          // break room capacity gates headcount
-  seats: 3,
-  // crew persist between shifts, and can leave
-  roster: [
-    { name:"MARCUS", morale:78, tenure:0, notice:false },
-    { name:"DEE",    morale:74, tenure:0, notice:false },
-    { name:"RAY",    morale:80, tenure:0, notice:false },
-  ],
-  quit: [],           // names of people who walked
-  backlog: 0,         // mis-routed + dumped packages waiting in problem solve
-};
+// Day-one state. The only source of truth for it — used for the initial META
+// and for a full career reset, so the two can never drift apart.
+function freshMeta(){
+  return {
+    day: 1,
+    credits: 0,
+    built: {},          // id -> true
+    last: null,         // telemetry from the previous shift
+    asked: {},          // upgrade id -> true, when a crew member has requested it
+    thanked: {},        // upgrade id -> true, once acknowledged
+    tables: 1,          // break room capacity gates headcount
+    seats: 3,
+    // crew persist between shifts, and can leave
+    roster: [
+      { name:"MARCUS", morale:78, tenure:0, notice:false },
+      { name:"DEE",    morale:74, tenure:0, notice:false },
+      { name:"RAY",    morale:80, tenure:0, notice:false },
+    ],
+    quit: [],           // names of people who walked
+    backlog: 0,         // mis-routed + dumped packages waiting in problem solve
+  };
+}
+const META = freshMeta();
 const NEW_HIRES = ["TASH","OKON","BENNY","PRIYA","LUIS","JOJO"];
 
 // Morale is never a bar on screen. The crew tell you. Grumble, then warning,
@@ -1191,7 +1205,71 @@ const UPGRADES = [
     apply(){ C.NOREAD_MIN = 34; C.NOREAD_MAX = 48; } },
 ];
 
+// Replays every owned UPGRADES entry's apply() onto a freshly-reset C. Only
+// UPGRADES — never AMENITIES (no apply() to replay) or ROOM (its apply()
+// mutates META.tables/seats directly, which are already persisted as raw
+// values; replaying it would double the seat count on every load). "hire" is
+// repeatable and never sets META.built.hire, so it's naturally skipped here
+// too — the hire is already captured in the persisted roster.
+function applyOwnedUpgrades(){
+  for(const u of UPGRADES) if(META.built[u.id]) u.apply();
+}
+
 function syncRoster(){ C.WORKER_COUNT = Math.max(1, META.roster.length); }
+
+// ══════════════════════════════════════════════════════════
+//  PERSISTENCE — save intent (META), never derived state (C). C is rebuilt
+//  from DEFAULTS + applyOwnedUpgrades() on every load, so a tuning change
+//  always reaches existing careers instead of freezing players onto whatever
+//  the numbers were the day they last played.
+// ══════════════════════════════════════════════════════════
+const SAVE_KEY = "the_shift_save_v1";
+let storageOK = false;
+(function probeStorage(){
+  // A real write, not just typeof localStorage — some contexts expose the
+  // object but throw on use (Cowork's preview panel among them).
+  try {
+    localStorage.setItem("\0probe", "1");
+    localStorage.removeItem("\0probe");
+    storageOK = true;
+  } catch(e) { storageOK = false; }
+})();
+
+// The exact shape written to storage — an explicit field list rather than
+// the whole META object, so a field added to META later doesn't silently
+// start getting persisted without that being a decision.
+function pickMeta(){
+  const { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last } = META;
+  return { day, credits, built, tables, seats, roster, quit, backlog, asked, thanked, last };
+}
+
+function safeSave(){
+  if(!storageOK) return;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify({ v: 1, meta: pickMeta() })); }
+  catch(e) { storageOK = false; }
+}
+
+function safeClear(){
+  try { localStorage.removeItem(SAVE_KEY); } catch(e) {}
+}
+
+// Loads a save into META if one exists and is a version this build
+// understands. Anything else — missing, corrupt, wrong version — is
+// discarded rather than half-read: the career starts fresh instead of
+// crashing on a shape it doesn't recognise.
+function safeLoad(){
+  if(!storageOK) return false;
+  let raw;
+  try { raw = localStorage.getItem(SAVE_KEY); }
+  catch(e) { storageOK = false; return false; }
+  if(!raw) return false;
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e) { safeClear(); return false; }
+  if(!parsed || parsed.v !== 1 || !parsed.meta){ safeClear(); return false; }
+  Object.assign(META, parsed.meta);
+  return true;
+}
 
 // Morale moves for reasons the player can point at, never randomly.
 function settleMorale(){
@@ -1541,9 +1619,11 @@ function drawBreak(){
 
 function showBreak(){
   hideAll();
+  safeSave();
   document.getElementById("break").classList.remove("hidden");
   document.getElementById("brkDay").textContent = META.day;
   document.getElementById("brkCred").textContent = META.credits;
+  document.getElementById("saveNotice").classList.toggle("hidden", storageOK);
   const psBtn = document.getElementById("brkPS");
   psBtn.classList.toggle("hidden", META.backlog < 8);
   psBtn.textContent = "PROBLEM SOLVE (" + META.backlog + " WAITING)";
@@ -1592,6 +1672,7 @@ function showDesign(){
         META.credits -= u.cost;
         if(!u.repeatable) META.built[u.id] = true;
         u.apply ? u.apply() : null;
+        safeSave();
         showDesign();
       });
       d.querySelector(".bt").appendChild(btn);
@@ -1720,6 +1801,7 @@ function psWin(){
   PS.solvedAlready = true;
   META.credits += PS.recover;
   META.backlog = Math.max(0, META.backlog - PS.recover);
+  safeSave();
   document.getElementById("psSub").textContent =
     "CLEARED — " + PS.recover + " PACKAGES RECOVERED AND SHIPPED";
   document.getElementById("psSub").style.color = "#5ec98a";
@@ -1763,7 +1845,6 @@ document.getElementById("brkPS").addEventListener("click", ()=>{ PS.bins = []; s
 // ══════════════════════════════════════════════════════════
 //  LAB
 // ══════════════════════════════════════════════════════════
-const DEFAULTS = JSON.parse(JSON.stringify(C));
 const TOGGLES = [
   ["WAVE_ENABLED",        "Inbound arrives in skewed waves (one trailer, one origin) instead of uniform noise"],
   ["EXCEPTION_NEEDS_CREW","Clearing a jam or no-read pulls a crew member off loading for 5s"],
@@ -1811,10 +1892,17 @@ document.getElementById("labBtn").addEventListener("click", ()=>{
 });
 document.getElementById("labReset").addEventListener("click", ()=>{
   Object.assign(C, JSON.parse(JSON.stringify(DEFAULTS)));
-  for(const u of UPGRADES) if(META.built[u.id]) u.apply();   // keep what was built
+  applyOwnedUpgrades();   // keep what was built
   buildLab();
 });
 document.getElementById("labStart").addEventListener("click", ()=>{ hideAll(); startRun(); });
+document.getElementById("labNewCareer").addEventListener("click", ()=>{
+  if(!confirm("Start a new career? This wipes your saved progress and can't be undone.")) return;
+  window.__sim.resetCareer();
+  safeClear();
+  hideAll();
+  showBreak();
+});
 
 document.getElementById("go").addEventListener("click", showBreak);
 document.getElementById("again").addEventListener("click", showBreak);
@@ -1822,13 +1910,27 @@ function startRun(){
   newGame(); fit(); drawPool(); hud(); last = 0; acc = 0;
 }
 
+// A save, if one exists and is a shape this build understands, replaces the
+// day-one META before anything else runs. applyOwnedUpgrades() then rebuilds
+// C's upgrade effects on top of DEFAULTS — a harmless no-op when nothing's
+// owned, which is exactly the fresh-career case.
+safeLoad();
+applyOwnedUpgrades();
 syncRoster();
 newGame(); fit(); drawPool(); hud();
 requestAnimationFrame(frame);
 
 // expose for automated testing
 window.__sim = { get S(){ return S; }, C, step, newGame, startRun, setAlloc, syncCrew, moveCrew, commitCrewToException, crewX, travelTime,
-  setLayout(a){ DROP_X = a.slice(); }, get DROP_X(){ return DROP_X; } };
+  setLayout(a){ DROP_X = a.slice(); }, get DROP_X(){ return DROP_X; },
+  // In-memory only — never touches storage. The clean way for a harness to
+  // begin a fresh, fully-staffed career without a stray save silently
+  // loading and measuring the wrong thing. See "THE TESTING TRAP" in CLAUDE.md.
+  resetCareer(){
+    Object.assign(C, JSON.parse(JSON.stringify(DEFAULTS)));
+    Object.assign(META, freshMeta());
+    syncRoster();
+  } };
 </script>
 </body>
 </html>
