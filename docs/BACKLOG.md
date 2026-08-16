@@ -6,8 +6,13 @@ Running list. Nothing here gets built without you saying so.
 
 ## OPEN BUGS
 
-**Mis-sorts are invisible.** Routing a no-read to the wrong chute works — the counter increments, it shows on the report — but nothing tells you in the moment. Cause: I set the package's destination to your choice, which repaints it the new colour and erases the evidence. It should keep its true colour and sit visibly foreign in the wrong chute.
-*Fix requires:* chute contents as a list rather than a count. Contained change, ~30 min. **Deferred at your request.**
+**Mis-sorts are invisible — now with a real fix in mind, not just a cosmetic one.** Routing a no-read to the wrong chute works — the counter increments, it shows on the report — but nothing tells you in the moment, and choosing wrong has no in-shift consequence beyond the number. The original fix (keep the package's true colour, let it sit visibly foreign in the wrong chute) is superseded by a fuller idea from a K2-planning brainstorm:
+
+A mis-picked "?" package rides off the end of the main line into a **holding chute — no trailer, not one of the four destinations.** It sits there until a worker is assigned to it, and clearing it is manual and slow on purpose: the worker walks over, picks up **one package at a time**, and carries it to its correct chute — competing for the same three people as every other lane, not a free background action. Anything still in the holding chute at shift end takes a **monetary penalty**, same shape as `missed at departure` today. This turns "invisible" into a real cost that trades against the core three-people-four-lanes tension instead of just a bigger number on the report.
+
+Relationship to Problem Solve: this is the *in-shift* chance to catch a mis-pick before it becomes backlog. Whatever's still sitting in the holding chute at shift end is what actually becomes Problem Solve material — the two systems aren't duplicating each other, they're the same failure at two different times.
+
+**Not part of K2.** This is a shift-mechanic change, not a floor-plan one — it doesn't touch the piece kit or the grid. Logging it here rather than building it now so it doesn't get lost, and so it doesn't turn into two kernels going at once.
 
 ---
 
