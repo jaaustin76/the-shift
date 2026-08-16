@@ -33,8 +33,12 @@ Running list. Nothing here gets built without you saying so.
 
 **Trailer dispatch verb.** You choose when to send each trailer instead of fixed departures. Built and tested in `shift_dispatch.html`; the decision didn't bind at the tuning I tried (trailers rarely filled before cutoff). Not exhausted — smaller trailers would make it matter.
 
+**More break room dialogue.** `buildDialogue()`'s candidate pool is currently a few dozen lines covering the telemetry that exists today. As new systems land (K5's disruptions, K6's non-conveyables, whatever K2's floor plan surfaces), each one is a natural source of new candidate lines — the pattern's already proven, it's just a small pool right now. Interesting, not urgent: the mechanism doesn't need to change, only its content, and it grows for free as a side effect of building other kernels rather than needing its own effort.
+
+**Crew demeanor tied to morale.** Right now morale is legible through what the crew *say*, never how they look — `drawPerson()` already reads `morale` (it slumps the figure below the warning threshold) but there's no distinct sprite state for grumbling vs. content vs. about to walk. You've flagged this is a sprite-art dependency — flat rectangles don't have much of a face to change — so it waits for the art pass rather than the current placeholder rendering. Parking it here rather than in NEXT UP since it's blocked on an asset decision, not on design.
+
 ---
 
 ## DONE
 
-Hard blocking with the cascade · recirculation as a purchase with a measured tradeoff · crew walking with distance-based travel · break room hub with telemetry-driven dialogue · morale, attrition and the seat gate · problem solve sort puzzle · slot grid with the collision invariant proven · one-tap crew control
+Hard blocking with the cascade · recirculation as a purchase with a measured tradeoff · crew walking with distance-based travel · break room hub with telemetry-driven dialogue · morale, attrition and the seat gate · problem solve sort puzzle · slot grid with the collision invariant proven · one-tap crew control · career persistence (K1) — credits, roster, morale, upgrades and backlog survive a reload
