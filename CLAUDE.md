@@ -1,9 +1,91 @@
 # THE SHIFT — project context
 
-A warehouse sort-aisle game. Single file, no dependencies. Open `index.html`.
+Single file, no dependencies. Open `index.html`.
 
-Read `docs/FINDINGS.md` before proposing design changes. It contains a measured negative
-result that redirects most obvious ideas.
+> **Run a parcel distribution centre, and face what actually goes wrong in one.**
+
+`docs/GAME.md` is the design. `docs/ROADMAP.md` is the order of work. Read both before
+proposing anything.
+
+---
+
+## HOW WE WORK — read this every session
+
+**1. Plan before code. Always.**
+Never start implementing on the first ask. Respond with: here's what I understand, here's
+the approach, here's what I think could go wrong — do you agree? Only implement after
+agreement. This catches design problems while they're still sentences instead of bugs
+spread across a file.
+
+**2. One kernel at a time.**
+`docs/ROADMAP.md` is a sequence of games, not features. Finish the current kernel, play it,
+then start the next. If it isn't playable, it isn't finished.
+
+**3. Ideas go to the backlog, not into the build.**
+When a new idea arrives mid-kernel — and they will, constantly — write it in
+`docs/BACKLOG.md` and keep going. Judge whether it's genuinely urgent or just interesting.
+Most are interesting. Say which one you think it is.
+
+**4. Measure before concluding.**
+Several strongly-held design beliefs in this project were wrong and only fell to a harness.
+When a result is surprising, **check the measurement before believing the finding** — it
+has been the harness roughly half the time. See the testing trap below.
+
+**5. Write code to be read by a non-developer.**
+Every line gets read. Prefer obvious over clever, name things fully, and comment the *why*
+rather than the *what*. If a block needs a paragraph to explain, it's probably wrong.
+
+**6. Say when something is a bad idea.**
+Including ideas that came from the user, and including ideas you suggested earlier. Being
+agreeable is not being useful. Back it up with a measurement where one is possible.
+
+---
+
+## What the game is
+
+You are the shift manager of a parcel distribution centre. Packages come off an inbound
+trailer, ride a slotted belt past four chutes, and get loaded onto outbound trailers
+before those trailers depart. **You have three people and four lanes, so you are always
+one short**, and a chute with nobody on it loads nothing at all.
+
+The full loop:
+
+**Break room** → **Shift** (3 real minutes) → **Report** → back to the break room.
+
+- **Break room** is the hub. Your crew sit at a table looking at you, and speech bubbles
+  drift in and out. Every line is generated from the last shift's actual telemetry, never
+  scripted — if Marcus walked 34 seconds he says so and asks for a walkway over the middle.
+  Ignore them and morale slides: grumble, then warning, then they hand notice in, then they
+  are gone. **The dialogue is the morale gauge** — there is no bar, by design.
+- **Shift** is the active game. Move crew between chutes, clear jams, route unreadable
+  labels. Crew walk, and walking loads nothing.
+- **Design** spends credits on the floor (throughput) or the break room (morale). Break
+  room seats gate hiring, so you cannot hire a fourth associate until you build a table.
+- **Problem solve** is an untimed sort puzzle built from the packages *you* mis-routed.
+  Clear it and they ship after all.
+
+The tone is authentic rather than cartoonish. It came from someone who works in a real
+DC, and the details — recirculation, no-reads at the scanner, trailer cutoff times,
+problem solve — are the real job, not decoration.
+
+**Reference points:** Kairosoft (Game Dev Story, Mega Mall Story) for the hub-and-loop
+shape and charm; Parcel Simulator for proof the subject sells; Mini Motorways for the
+principle that the simulation running is feedback, not gameplay.
+
+## Where this is going
+
+Current state: shift loop, break room and problem solve all work and are measured. The
+floor plan does not exist yet, and **nothing persists across a reload** — so the meta-loop
+has never actually been played.
+
+`docs/ROADMAP.md` holds the kernel sequence. Next up is **K1 — persistence**, then
+**K2 — the floor plan**. Do not skip ahead.
+
+**Platform is deliberately undecided.** Plain HTML/canvas because the valuable part is the
+simulation and its measured tuning, which ports anywhere; rendering and UI is the cheap
+half any port rewrites. Evidence points at Steam over mobile for this genre, and a web
+build reaches Steam via Electron cheaply. Do not propose an engine migration without a
+platform decision behind it.
 
 ---
 
@@ -81,6 +163,8 @@ are invalid.
 
 ```
 index.html          the whole game (~1900 lines)
+docs/GAME.md        the design. what the game is and why
+docs/ROADMAP.md      the kernel sequence. what gets built and in what order
 docs/FINDINGS.md    the strategy search. read first
 docs/BACKLOG.md     open bugs and parked ideas. check before proposing work
 docs/BUILD_LOG.md   decisions made autonomously, with reasoning
@@ -111,12 +195,3 @@ node research/layout_test.js     # structure vs policy — the decisive one
 
 Current benchmark: passive ~70 shipped, played well ~146. Any change should be measured
 against that, with the roster reset.
-
-## Working style that has worked
-
-Measure before concluding. Several strongly-held design beliefs in this project were
-wrong and only fell to a harness. When a result is surprising, check the measurement
-before believing the finding — it has been the harness roughly half the time.
-
-Do not implement every idea on sight. `docs/BACKLOG.md` is the triage list; things move
-off it deliberately.
