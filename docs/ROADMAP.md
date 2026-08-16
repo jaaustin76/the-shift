@@ -150,6 +150,16 @@ physically. Settles the shape of K8 well past its one-paragraph roadmap entry:
   divert works today. Upgradeable to hold up to 3, independent of the chute's own capacity
   (e.g. a 10-capacity chute might have a 1-, and later 3-, capacity staging slot in front
   of it).
+- **The staging slot is exactly one grid cell** — proportionate to the main line, not a
+  special size, sized and rendered the same as any other cell on the floor. Upgrading it
+  to 3 makes it a 3-cell spur, not a bigger single slot. A branch physically terminates
+  there; it's the one point on the floor a branch and the main line's divert both reach.
+- **Chutes likely need to split 2-above / 2-below the main line for this to read clearly.**
+  All four chutes hanging off the same side of the line, as they do today, leaves no room
+  for a branch and its staging slot to route in without crossing or crowding another
+  chute's own connector. Splitting them across both sides gives branches a side to
+  approach from. Not settled which two go where — revisit once branches are actually
+  being built, not before.
 - **The branch needs a manual release; the main line doesn't.** Admitting the *branch's*
   next package into the staging slot is a tap — that's the actual arbitration point,
   since two sources now feed one slot. The main line keeps auto-feeding as it always has.
